@@ -14,13 +14,13 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ message })
     <div className={`flex w-full mb-8 ${isUser ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
       <div className={`flex max-w-[85%] md:max-w-[75%] ${isUser ? 'flex-row-reverse' : 'flex-row'} gap-4 group`}>
         
-        {/* Avatar */}
+        {/* 头像 */}
         <div className={`w-9 h-9 rounded-lg flex-shrink-0 flex items-center justify-center shadow-sm mt-1 transition-colors duration-200
           ${isUser ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-600 border border-indigo-100'}`}>
           {isUser ? <User size={18} /> : <Bot size={18} />}
         </div>
         
-        {/* Bubble */}
+        {/* 气泡 */}
         <div className="flex flex-col">
             <div className={`relative px-5 py-4 rounded-2xl shadow-sm text-sm leading-6 
               ${isUser 
@@ -44,7 +44,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({ message })
               </div>
             </div>
             
-            {/* Metadata (Hidden by default, shown on hover) */}
+            {/* 元数据 (默认隐藏，悬停时显示) */}
             <span className={`text-[10px] text-gray-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity ${isUser ? 'text-right' : 'text-left'}`}>
                 {new Date(message.timestamp).toLocaleTimeString()}
             </span>
