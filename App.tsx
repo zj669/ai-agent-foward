@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, Terminal, StopCircle, Sparkles, Activity, Trash2, Command, MessageSquare, History, Plus } from 'lucide-react';
+import { Send, Bot, Terminal, StopCircle, Sparkles, Activity, Trash2, Command, MessageSquare, History, Plus, ChevronDown } from 'lucide-react';
 import { LogEntryItem } from './components/LogEntryItem';
 import { ChatMessageBubble } from './components/ChatMessageBubble';
 import { fetchAgentStream } from './services/agentService';
@@ -10,6 +10,19 @@ const API_BASE_URL = 'http://localhost:8091';
 const AGENT_ENDPOINT = '/api/v1/agent/auto_agent';
 const NEW_CHAT_ENDPOINT = '/api/v1/agent/newChat';
 const OLD_CHAT_ENDPOINT = '/api/v1/agent/oldChat';
+const AGENT_LIST_ENDPOINT = '/api/v1/agent/list';
+
+// Agent类型定义
+interface AiAgent {
+  id: number;
+  agentId: string;
+  agentName: string;
+  description: string;
+  channel: string;
+  status: number;
+  createTime: string;
+  updateTime: string;
+}
 
 const App: React.FC = () => {
   // --- State ---
@@ -26,18 +39,23 @@ const App: React.FC = () => {
   const [sessionId, setSessionId] = useState<string>('');
   const [showHistory, setShowHistory] = useState(false);
   const [historySessions, setHistorySessions] = useState<string[]>([]);
+  const [showAgentSelector, setShowAgentSelector] = useState(false);
+  const [agents, setAgents] = useState<AiAgent[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<AiAgent | null>(null);
   
   // --- Refs for Scrolling ---
   const logsEndRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
+  const agentRef = useRef<HTMLDivElement>(null);
 
   // --- Effects ---
   
-  // 初始化时获取新的会话ID
+  // 初始化时获取新的会话ID和agent列表
   useEffect(() => {
     fetchNewSessionId();
+    fetchAgentList();
   }, []);
 
   // 点击外部关闭历史记录面板
@@ -45,6 +63,9 @@ const App: React.FC = () => {
     const handleClickOutside = (event: MouseEvent) => {
       if (historyRef.current && !historyRef.current.contains(event.target as Node)) {
         setShowHistory(false);
+      }
+      if (agentRef.current && !agentRef.current.contains(event.target as Node)) {
+        setShowAgentSelector(false);
       }
     };
 
@@ -101,6 +122,22 @@ const App: React.FC = () => {
     }
   };
 
+  const fetchAgentList = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}${AGENT_LIST_ENDPOINT}`);
+      const data = await response.json();
+      if (data.code === '0000') {
+        setAgents(data.data);
+        // 默认选择第一个agent
+        if (data.data.length > 0) {
+          setSelectedAgent(data.data[0]);
+        }
+      }
+    } catch (error) {
+      console.error('获取Agent列表失败:', error);
+    }
+  };
+
   const fetchHistorySessions = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}${OLD_CHAT_ENDPOINT}`);
@@ -128,8 +165,13 @@ const App: React.FC = () => {
     setProcessLogs([]);
   };
 
+  const handleSelectAgent = (agent: AiAgent) => {
+    setSelectedAgent(agent);
+    setShowAgentSelector(false);
+  };
+
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || !selectedAgent) return;
 
     const userMsg = input;
     setInput('');
@@ -144,7 +186,7 @@ const App: React.FC = () => {
     await fetchAgentStream(
       `${API_BASE_URL}${AGENT_ENDPOINT}`,
       {
-        aiAgentId: "3", 
+        aiAgentId: selectedAgent.agentId, 
         message: userMsg,
         sessionId: sessionId,
         maxStep: 10
@@ -278,61 +320,110 @@ const App: React.FC = () => {
             </div>
           </div>
           
-          {/* 历史记录按钮 */}
-          <div className="relative" ref={historyRef}>
-            <button
-              onClick={() => {
-                if (!showHistory) {
-                  fetchHistorySessions();
-                }
-                setShowHistory(!showHistory);
-              }}
-              className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
-            >
-              <History size={16} />
-              <span className="hidden sm:inline">历史记录</span>
-            </button>
-            
-            {/* 历史记录面板 */}
-            {showHistory && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-slate-200 z-50">
-                <div className="p-3 border-b border-slate-100">
-                  <h3 className="font-medium text-slate-800 flex items-center gap-2">
-                    <History size={16} />
-                    历史会话
-                  </h3>
-                </div>
-                <div className="max-h-64 overflow-y-auto">
-                  {historySessions.length > 0 ? (
-                    historySessions.map((session, index) => (
-                      <div
-                        key={index}
-                        onClick={() => handleSelectHistory(session)}
-                        className="p-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 cursor-pointer transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-mono text-slate-600">#{session.slice(-6)}</span>
-                          <span className="text-xs text-slate-400">{index + 1}</span>
+          <div className="flex items-center gap-2">
+            {/* Agent选择器 */}
+            <div className="relative" ref={agentRef}>
+              <button
+                onClick={() => setShowAgentSelector(!showAgentSelector)}
+                className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
+                disabled={isLoading}
+              >
+                <Bot size={16} />
+                <span className="hidden sm:inline">
+                  {selectedAgent ? selectedAgent.agentName : '选择Agent'}
+                </span>
+                <ChevronDown size={16} />
+              </button>
+              
+              {/* Agent选择面板 */}
+              {showAgentSelector && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-slate-200 z-50">
+                  <div className="p-3 border-b border-slate-100">
+                    <h3 className="font-medium text-slate-800 flex items-center gap-2">
+                      <Bot size={16} />
+                      选择Agent
+                    </h3>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {agents.length > 0 ? (
+                      agents.map((agent) => (
+                        <div
+                          key={agent.id}
+                          onClick={() => handleSelectAgent(agent)}
+                          className={`p-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 cursor-pointer transition-colors ${
+                            selectedAgent?.id === agent.id ? 'bg-indigo-50' : ''
+                          }`}
+                        >
+                          <div className="font-medium text-slate-800">{agent.agentName}</div>
+                          <div className="text-xs text-slate-500 mt-1 line-clamp-2">{agent.description}</div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="p-4 text-center text-slate-500 text-sm">
+                        暂无可用Agent
                       </div>
-                    ))
-                  ) : (
-                    <div className="p-4 text-center text-slate-500 text-sm">
-                      暂无历史记录
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-                <div className="p-2 border-t border-slate-100">
-                  <button
-                    onClick={fetchNewSessionId}
-                    className="w-full flex items-center justify-center gap-2 p-2 text-sm text-slate-600 hover:bg-slate-100 rounded transition-colors"
-                  >
-                    <Plus size={16} />
-                    新建会话
-                  </button>
+              )}
+            </div>
+            
+            {/* 历史记录按钮 */}
+            <div className="relative" ref={historyRef}>
+              <button
+                onClick={() => {
+                  if (!showHistory) {
+                    fetchHistorySessions();
+                  }
+                  setShowHistory(!showHistory);
+                }}
+                className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
+              >
+                <History size={16} />
+                <span className="hidden sm:inline">历史记录</span>
+              </button>
+              
+              {/* 历史记录面板 */}
+              {showHistory && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-slate-200 z-50">
+                  <div className="p-3 border-b border-slate-100">
+                    <h3 className="font-medium text-slate-800 flex items-center gap-2">
+                      <History size={16} />
+                      历史会话
+                    </h3>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {historySessions.length > 0 ? (
+                      historySessions.map((session, index) => (
+                        <div
+                          key={index}
+                          onClick={() => handleSelectHistory(session)}
+                          className="p-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-mono text-slate-600">#{session.slice(-6)}</span>
+                            <span className="text-xs text-slate-400">{index + 1}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-4 text-center text-slate-500 text-sm">
+                        暂无历史记录
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-2 border-t border-slate-100">
+                    <button
+                      onClick={fetchNewSessionId}
+                      className="w-full flex items-center justify-center gap-2 p-2 text-sm text-slate-600 hover:bg-slate-100 rounded transition-colors"
+                    >
+                      <Plus size={16} />
+                      新建会话
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
@@ -356,14 +447,14 @@ const App: React.FC = () => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
               placeholder="让我分析数据、编写代码或解决问题..."
-              disabled={isLoading || !sessionId}
+              disabled={isLoading || !sessionId || !selectedAgent}
               className="w-full bg-slate-50 text-slate-800 placeholder:text-slate-400 rounded-xl pl-5 pr-14 py-4 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all shadow-sm hover:border-slate-300 disabled:opacity-60 disabled:cursor-not-allowed"
             />
             <button
               onClick={handleSend}
-              disabled={isLoading || !input.trim() || !sessionId}
+              disabled={isLoading || !input.trim() || !sessionId || !selectedAgent}
               className={`absolute right-2 top-2 bottom-2 aspect-square rounded-lg flex items-center justify-center transition-all duration-200
-                ${isLoading || !input.trim() || !sessionId
+                ${isLoading || !input.trim() || !sessionId || !selectedAgent
                   ? 'bg-transparent text-slate-300 cursor-not-allowed' 
                   : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md hover:shadow-lg transform hover:-translate-y-0.5'}`}
             >
