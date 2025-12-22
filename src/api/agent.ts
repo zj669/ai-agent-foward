@@ -21,3 +21,7 @@ export const publishAgent = async (agentId: string) => {
 export const getConversationIds = async (agentId: string): Promise<{ conversationId: string }[]> => {
     return request.get(`/client/agent/conversations/${agentId}`);
 };
+
+export const getNewConversationId = async (): Promise<string> => {
+    return request.get('/client/agent/newChat');
+};

@@ -24,7 +24,7 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 // @ts-ignore
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { getAgentDetail, getConversationIds } from '@/api/agent';
+import { getAgentDetail, getConversationIds, getNewConversationId } from '@/api/agent';
 import dayjs from 'dayjs';
 
 const { Sider, Content } = Layout;
@@ -41,6 +41,11 @@ interface NodeExecution {
     startTime: number;
     duration?: number;
     result?: string; // Optional result summary
+    progress?: {     // 新增
+        current: number;
+        total: number;
+        percentage: number;
+    };
 }
 
 interface ChatMessage {
@@ -50,6 +55,11 @@ interface ChatMessage {
     timestamp: number;
     loading?: boolean;
     error?: boolean;
+    dagProgress?: {   // 新增
+        current: number;
+        total: number;
+        percentage: number;
+    };
 }
 
 interface ConversationItem {
@@ -140,23 +150,86 @@ const AgentChat: React.FC = () => {
         setInput('');
     };
 
-    const selectConversation = (cid: string) => {
+    const selectConversation = async (cid: string) => {
         if (cid === conversationId) return;
         if (loading) {
             message.warning('请先停止当前对话');
             return;
         }
+
         setConversationId(cid);
         conversationIdRef.current = cid;
-        setMessages([
-            {
-                role: 'assistant',
-                nodes: [],
-                content: `已加载历史会话: **${cid}**\n\n*(注意：当前版本暂不支持查看历史消息记录，但Agent已加载之前的上下文记忆)*`,
-                timestamp: Date.now()
+
+        // 显示加载状态
+        setMessages([]);
+
+        try {
+            // 查询历史消息
+            const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:8080';
+            const response = await fetch(`${API_BASE_URL}/client/agent/chat/history/${cid}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('加载历史消息失败');
             }
-        ]);
+
+            const result = await response.json();
+
+            if (result.code === 200 && result.data) {
+                const history = result.data;
+
+                // 转换为前端消息格式
+                const historyMessages: ChatMessage[] = history.map((msg: any) => ({
+                    role: msg.role,
+                    content: msg.content,
+                    nodes: (msg.nodes || []).map((node: any) => ({
+                        nodeId: node.nodeId,
+                        nodeName: node.nodeName,
+                        status: node.status as 'pending' | 'running' | 'completed' | 'error',
+                        content: node.content || '',
+                        startTime: 0, // History messages don't need precise startTime for display
+                        duration: node.duration,
+                        result: node.result,
+                        progress: node.progress
+                    })),
+                    timestamp: msg.timestamp,
+                    error: msg.error,
+                    loading: false,
+                    dagProgress: msg.dagProgress
+                }));
+
+                setMessages(historyMessages);
+
+                if (historyMessages.length > 0) {
+                    message.success(`已加载 ${historyMessages.length} 条历史消息`);
+                } else {
+                    message.info('该会话暂无历史消息');
+                }
+            } else {
+                throw new Error(result.message || '加载失败');
+            }
+
+        } catch (e: any) {
+            console.error('加载历史消息失败', e);
+            message.error('加载历史消息失败: ' + (e.message || '未知错误'));
+
+            // 降级显示提示
+            setMessages([
+                {
+                    role: 'assistant',
+                    nodes: [],
+                    content: `会话 ${cid} 历史消息加载失败\n\n请稍后重试或开始新对话`,
+                    timestamp: Date.now()
+                }
+            ]);
+        }
     };
+
 
     const handleSend = async () => {
         if (loading) return;
@@ -173,6 +246,18 @@ const AgentChat: React.FC = () => {
         setMessages(prev => [...prev, { role: 'assistant', nodes: [], timestamp: Date.now(), loading: true }]);
 
         try {
+            // Ensure we have a conversation ID
+            if (!conversationIdRef.current) {
+                try {
+                    const newCid = await getNewConversationId();
+                    setConversationId(newCid);
+                    conversationIdRef.current = newCid;
+                } catch (e) {
+                    console.error('Failed to generate conversation ID', e);
+                    // allow fallback to undefined, let backend handle it or fail
+                }
+            }
+
             abortControllerRef.current = new AbortController();
             const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:8080';
 
@@ -245,7 +330,50 @@ const AgentChat: React.FC = () => {
     };
 
     const handleSSEEvent = (data: any) => {
-        // Update Conversation ID if needed
+        // 1. DAG Start Event (\u65b0\u589e)
+        if (data.type === 'dag_start') {
+            setMessages(prev => {
+                const newMsgs = [...prev];
+                const currentMsg = newMsgs[newMsgs.length - 1];
+                if (currentMsg && currentMsg.role === 'assistant') {
+                    currentMsg.dagProgress = {
+                        current: 0,
+                        total: data.totalNodes || 0,
+                        percentage: 0
+                    };
+                }
+                return newMsgs;
+            });
+
+            // Update conversationId
+            if (data.conversationId && conversationIdRef.current !== data.conversationId) {
+                conversationIdRef.current = data.conversationId;
+                setConversationId(data.conversationId);
+                setConversations(prev => {
+                    if (prev.find(c => c.conversationId === data.conversationId)) return prev;
+                    return [{ conversationId: data.conversationId }, ...prev];
+                });
+            }
+            return;
+        }
+
+        // 2. DAG Complete Event (\u65b0\u589e)
+        if (data.type === 'dag_complete') {
+            setMessages(prev => {
+                const newMsgs = [...prev];
+                const currentMsg = newMsgs[newMsgs.length - 1];
+                if (currentMsg && currentMsg.role === 'assistant') {
+                    currentMsg.loading = false;
+                    if (data.status === 'failed') {
+                        currentMsg.error = true;
+                    }
+                }
+                return newMsgs;
+            });
+            return;
+        }
+
+        // 3. Update conversationId (\u4fee\u6539\u5b57\u6bb5\u540d)
         if (data.conversationId && conversationIdRef.current !== data.conversationId) {
             conversationIdRef.current = data.conversationId;
             setConversationId(data.conversationId);
@@ -260,40 +388,52 @@ const AgentChat: React.FC = () => {
             const currentMsg = newMsgs[newMsgs.length - 1];
             if (!currentMsg || currentMsg.role !== 'assistant') return prev;
 
-            // 1. Node Lifecycle
+            // 4. Node Lifecycle (\u6dfb\u52a0\u8fdb\u5ea6\u5904\u7406)
             if (data.type === 'node_lifecycle') {
                 if (data.status === 'starting') {
-                    // Create new node
-                    const existingNode = currentMsg.nodes.find(n => n.nodeId === (data.nodeId || data.nodeName));
+                    const existingNode = currentMsg.nodes.find(n => n.nodeId === data.nodeId);
                     if (!existingNode) {
                         currentMsg.nodes.push({
-                            nodeId: data.nodeId || `node_${Date.now()}`,
-                            nodeName: data.nodeName || '未知节点',
+                            nodeId: data.nodeId,
+                            nodeName: data.nodeName || '\u672a\u77e5\u8282\u70b9',
                             status: 'running',
                             content: '',
-                            startTime: data.timestamp || Date.now()
+                            startTime: data.timestamp || Date.now(),
+                            progress: data.progress  // \u65b0\u589e
                         });
-                        setActiveNodeId(data.nodeId || data.nodeName);
+                        setActiveNodeId(data.nodeId);
                     }
                 } else if (data.status === 'completed') {
-                    // Complete node
-                    const node = currentMsg.nodes.find(n => n.nodeId === (data.nodeId || data.nodeName))
-                        || currentMsg.nodes.find(n => n.nodeName === data.nodeName && n.status === 'running');
-
+                    const node = currentMsg.nodes.find(n => n.nodeId === data.nodeId);
                     if (node) {
                         node.status = 'completed';
+                        node.duration = data.durationMs;
+                        node.result = data.result;
+                        node.progress = data.progress;  // \u65b0\u589e
+                    }
+
+                    // \u66f4\u65b0 DAG \u8fdb\u5ea6
+                    if (data.progress && currentMsg.dagProgress) {
+                        currentMsg.dagProgress = {
+                            current: data.progress.current,
+                            total: data.progress.total,
+                            percentage: data.progress.percentage
+                        };
+                    }
+                } else if (data.status === 'failed') {
+                    const node = currentMsg.nodes.find(n => n.nodeId === data.nodeId);
+                    if (node) {
+                        node.status = 'error';
                         node.duration = data.durationMs;
                         node.result = data.result;
                     }
                 }
             }
 
-            // 2. Node Execute (Content Streaming)
+            // 5. Node Execute (\u5b57\u6bb5\u540d\u4fdd\u6301\u4e0d\u53d8,\u56e0\u4e3a\u540e\u7aef\u5df2\u6539\u4e3a conversationId)
             else if (data.type === 'node_execute') {
-                // Find target node (prefer active, then by name, then last running)
                 let node = currentMsg.nodes.find(n => n.nodeName === data.nodeName && n.status === 'running');
 
-                // If no node found (maybe log came before lifecycle?), create it implied
                 if (!node && data.nodeName) {
                     node = {
                         nodeId: `implied_${Date.now()}`,
@@ -310,15 +450,29 @@ const AgentChat: React.FC = () => {
                 }
             }
 
-            // 3. Fallback (Token/Answer)
+            // 6. Error Event (\u65b0\u589e\u6807\u51c6\u5316\u5904\u7406)
+            else if (data.type === 'error') {
+                currentMsg.error = true;
+                currentMsg.loading = false;
+
+                // \u521b\u5efa\u9519\u8bef\u8282\u70b9
+                const errorNode = {
+                    nodeId: 'error_node',
+                    nodeName: '\u9519\u8bef',
+                    status: 'error' as const,
+                    content: `[${data.errorCode || 'ERROR'}] ${data.message}`,
+                    startTime: Date.now()
+                };
+                currentMsg.nodes.push(errorNode);
+            }
+
+            // 7. Legacy formats (\u4fdd\u6301\u4e0d\u53d8)
             else if (data.type === 'token' || data.type === 'answer') {
-                // If legacy format, just append to a dedicated "Response" node or fallback content
-                // For this refactor, let's treat it as a "Final Response" node
-                let finalNode = currentMsg.nodes.find(n => n.nodeName === '最终回复');
+                let finalNode = currentMsg.nodes.find(n => n.nodeName === '\u6700\u7ec8\u56de\u590d');
                 if (!finalNode) {
                     finalNode = {
                         nodeId: 'final_response',
-                        nodeName: '最终回复',
+                        nodeName: '\u6700\u7ec8\u56de\u590d',
                         status: 'running',
                         content: '',
                         startTime: Date.now()
@@ -491,6 +645,32 @@ const AgentChat: React.FC = () => {
                                     {/* Assistant Complex Glass Box */}
                                     {msg.role === 'assistant' && (
                                         <div className="flex flex-col gap-2 w-full">
+
+                                            {/* DAG Progress Indicator */}
+                                            {msg.dagProgress && msg.dagProgress.total > 0 && (
+                                                <div className="bg-white border border-blue-100 rounded-lg p-3 shadow-sm">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <span className="text-xs font-medium text-gray-700">
+                                                            执行进度
+                                                        </span>
+                                                        <span className="text-xs text-gray-500">
+                                                            {msg.dagProgress.current}/{msg.dagProgress.total} 节点
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                                                        <div
+                                                            className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-500 ease-out"
+                                                            style={{ width: `${msg.dagProgress.percentage}%` }}
+                                                        />
+                                                    </div>
+                                                    {msg.dagProgress.percentage === 100 && !msg.loading && (
+                                                        <div className="flex items-center gap-1 mt-2 text-xs text-green-600">
+                                                            <CheckCircleOutlined />
+                                                            <span>执行完成</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
 
                                             {/* 1. Legacy/Fallback Content */}
                                             {msg.content && !msg.nodes.length && (
