@@ -7,9 +7,6 @@ WORKDIR /app
 # 复制package.json和package-lock.json（如果存在）
 COPY package*.json ./
 
-# 复制环境变量文件（如果存在）
-COPY .env.production* ./ 2>/dev/null || echo "No .env.production file found"
-
 # 安装依赖
 RUN npm ci
 
