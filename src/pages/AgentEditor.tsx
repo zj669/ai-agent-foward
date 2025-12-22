@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, message, Input, Spin } from 'antd';
-import { SaveOutlined, ArrowLeftOutlined, SettingOutlined } from '@ant-design/icons';
+import { Button, message, Input, Spin, Modal } from 'antd';
+import { SaveOutlined, ArrowLeftOutlined, SettingOutlined, ExpandAltOutlined } from '@ant-design/icons';
 import Sidebar from '@/components/editor/Sidebar';
 import FlowCanvasWrapper from '@/components/editor/FlowCanvas';
 import ConfigPanel from '@/components/editor/ConfigPanel';
@@ -12,12 +12,20 @@ import { convertToGraphJsonSchema, convertFromGraphJsonSchema } from '@/utils/gr
 const AgentEditor: React.FC = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { nodes, edges, setGraph } = useAgentStore();
+    const { nodes, edges, setGraph, selectedNodeId } = useAgentStore();
 
     const [loading, setLoading] = useState(false);
     const [agentName, setAgentName] = useState('My New Agent');
     const [description, setDescription] = useState('');
     const [showConfig, setShowConfig] = useState(true);
+    const [showDescModal, setShowDescModal] = useState(false);
+
+    // Auto-show config panel when a node is selected
+    useEffect(() => {
+        if (selectedNodeId) {
+            setShowConfig(true);
+        }
+    }, [selectedNodeId]);
 
     // Unified drag state
     const [positions, setPositions] = useState({
@@ -227,8 +235,21 @@ const AgentEditor: React.FC = () => {
                     <Input
                         value={agentName}
                         onChange={e => setAgentName(e.target.value)}
-                        className="w-64 font-bold border-transparent hover:border-gray-300 focus:border-blue-500"
+                        className="w-48 font-bold border-transparent hover:border-gray-300 focus:border-blue-500 text-lg !px-2"
                         placeholder="Agent名称"
+                    />
+                    <div className="h-6 w-px bg-gray-300 mx-2" />
+                    <Input
+                        value={description}
+                        onChange={e => setDescription(e.target.value)}
+                        className="w-96 border-transparent hover:border-gray-300 focus:border-blue-500 text-gray-500 !px-2"
+                        placeholder="在此输入Agent描述..."
+                    />
+                    <Button
+                        type="text"
+                        icon={<ExpandAltOutlined />}
+                        onClick={() => setShowDescModal(true)}
+                        className="text-gray-400 hover:text-blue-500"
                     />
                 </div>
                 <div className="flex items-center gap-2">
@@ -283,23 +304,35 @@ const AgentEditor: React.FC = () => {
                 {/* Right Sidebar - Config Panel (Floating) */}
                 {showConfig && (
                     <div
-                        ref={panelRef}
-                        className="fixed w-80 bg-white shadow-2xl z-50 rounded-lg flex flex-col"
+                        className="fixed right-4 top-20 w-80 bg-white shadow-2xl z-50 rounded-lg flex flex-col border border-gray-200"
                         style={{
-                            top: positions.panel.y,
-                            left: positions.panel.x,
-                            height: 'calc(100vh - 100px)', // Adjust height constraint
-                            maxHeight: '800px'
+                            height: 'calc(100vh - 200px)', // Adjust height constraint
+                            maxHeight: '1000px'
                         }}
                     >
                         <ConfigPanel
                             onClose={() => setShowConfig(false)}
-                            onHeaderMouseDown={(e) => handleDragStart(e, 'panel')}
                         />
                     </div>
                 )}
             </div>
-        </div>
+
+
+            <Modal
+                title="编辑 Agent 描述"
+                open={showDescModal}
+                onOk={() => setShowDescModal(false)}
+                onCancel={() => setShowDescModal(false)}
+                width={600}
+            >
+                <Input.TextArea
+                    rows={6}
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    placeholder="请输入详细的 Agent 描述..."
+                />
+            </Modal>
+        </div >
     );
 };
 

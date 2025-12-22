@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { getConfigDefinitions, getConfigFieldDefinitions } from '@/api/config';
-import { Form, Input, Select, InputNumber, Checkbox, Switch, Button, Spin, Empty, Divider, message, Radio, Tooltip } from 'antd';
-import { InfoCircleOutlined } from '@ant-design/icons';
+import { Form, Input, Select, InputNumber, Checkbox, Switch, Button, Spin, Empty, Divider, message, Radio, Tooltip, Modal } from 'antd';
+import { InfoCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 
 // Type definitions for config fields
 interface FieldDef {
@@ -178,7 +178,7 @@ interface ConfigPanelProps {
 }
 
 const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown }) => {
-    const { nodes, selectedNodeId, updateNodeData } = useAgentStore();
+    const { nodes, selectedNodeId, updateNodeData, deleteNode } = useAgentStore();
     const selectedNode = nodes.find(n => n.id === selectedNodeId);
 
     const [loading, setLoading] = useState(false);
@@ -324,7 +324,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-2">
+            <div className="flex-1 overflow-y-auto px-4 py-4 bg-gray-50/50">
                 {loading ? (
                     <div className="flex justify-center items-center h-40">
                         <Spin tip="加载配置中..." />
@@ -344,10 +344,11 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
                             const hasOptions = configDef?.options && configDef.options.length > 0;
 
                             return (
-                                <div key={configType} className="mb-6">
-                                    <Divider orientation="left" style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#888' }}>
-                                        {configDef?.configName || configType}
-                                    </Divider>
+                                <div key={configType} className="mb-4 bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-all duration-300">
+                                    <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-50">
+                                        <div className="w-1 h-4 bg-blue-500 rounded-full shadow-sm shadow-blue-200" />
+                                        <span className="font-bold text-gray-700 text-sm">{configDef?.configName || configType}</span>
+                                    </div>
 
                                     {configDef?.description && (
                                         <p className="text-xs text-gray-400 mb-4 px-1">{configDef.description}</p>
@@ -365,9 +366,12 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
                                             key={`${configType}-selection`}
                                             name={[configType, getIdFieldName(configType)]}
                                             label={`选择${configDef?.configName || configType}`}
-                                            rules={[{ required: true, message: '请选择' }]}
+                                            rules={[{ required: !['MCP_TOOL', 'ADVISOR'].includes(configType), message: '请选择' }]}
                                         >
-                                            <Select placeholder="请选择">
+                                            <Select
+                                                placeholder={['MCP_TOOL', 'ADVISOR'].includes(configType) ? "请选择 (可选)" : "请选择"}
+                                                allowClear={['MCP_TOOL', 'ADVISOR'].includes(configType)}
+                                            >
                                                 {configDef!.options!.map(opt => (
                                                     <Select.Option key={opt.id} value={opt.id}>
                                                         {opt.name} {opt.type ? <span className="text-gray-400 text-xs">({opt.type})</span> : ''}
@@ -395,6 +399,31 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
                         })}
                     </Form>
                 )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+                <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => {
+                        Modal.confirm({
+                            title: '确认删除',
+                            content: '确定要删除该节点吗？',
+                            okText: '删除',
+                            okType: 'danger',
+                            cancelText: '取消',
+                            onOk: () => {
+                                if (selectedNodeId) {
+                                    deleteNode(selectedNodeId);
+                                    if (onClose) onClose();
+                                }
+                            }
+                        });
+                    }}
+                >
+                    删除节点
+                </Button>
             </div>
         </div>
     );

@@ -22,6 +22,7 @@ interface AgentState {
     onNodesChange: OnNodesChange;
     onEdgesChange: OnEdgesChange;
     onConnect: OnConnect;
+    onNodesDelete: (nodes: Node[]) => void;
 
     setNodes: (nodes: Node[]) => void;
     setEdges: (edges: Edge[]) => void;
@@ -30,6 +31,7 @@ interface AgentState {
     setSelectedNodeId: (id: string | null) => void;
     updateNodeData: (id: string, data: any) => void;
     setGraph: (nodes: Node[], edges: Edge[]) => void;
+    deleteNode: (id: string) => void;
 }
 
 export const useAgentStore = create<AgentState>((set, get) => ({
@@ -56,6 +58,17 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         }));
     },
 
+    onNodesDelete: (deleted: Node[]) => {
+        set((state) => {
+            const deletedIds = new Set(deleted.map((n) => n.id));
+            return {
+                edges: state.edges.filter(
+                    (edge) => !deletedIds.has(edge.source) && !deletedIds.has(edge.target)
+                ),
+            };
+        });
+    },
+
     setNodes: (nodes) => set({ nodes }),
     setEdges: (edges) => set({ edges }),
 
@@ -75,4 +88,10 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     })),
 
     setGraph: (nodes, edges) => set({ nodes, edges }),
+
+    deleteNode: (id) => set((state) => ({
+        nodes: state.nodes.filter((node) => node.id !== id),
+        edges: state.edges.filter((edge) => edge.source !== id && edge.target !== id),
+        selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId
+    })),
 }));

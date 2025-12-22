@@ -7,7 +7,7 @@ import { StreamData, ChatMessage } from '../types';
 
 // Constants
 // 生产环境中应该使用相对路径或者配置的API地址
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:8080';
 const AGENT_ENDPOINT = '/api/v1/agent/auto_agent';
 const NEW_CHAT_ENDPOINT = '/api/v1/agent/newChat';
 const OLD_CHAT_ENDPOINT = '/api/v1/agent/oldChat';

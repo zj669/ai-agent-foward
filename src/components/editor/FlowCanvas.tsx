@@ -2,10 +2,15 @@ import React, { useCallback, useRef } from 'react';
 import { ReactFlow, ReactFlowProvider, Background, Controls, MiniMap, useReactFlow } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useAgentStore } from '@/store/useAgentStore';
+import CustomNode from './CustomNode';
+
+const nodeTypes = {
+    custom: CustomNode,
+};
 
 const FlowCanvas: React.FC = () => {
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
-    const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, setSelectedNodeId } = useAgentStore();
+    const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, setSelectedNodeId, onNodesDelete } = useAgentStore();
     // const { screenToFlowPosition } = useReactFlow(); // screenToFlowPosition might be unstable in some versions? No, it's standard now.
     // However, useReactFlow must be inside ReactFlowProvider. FlowCanvas is inside FlowCanvasWrapper which has Provider.
     const instance = useReactFlow();
@@ -43,7 +48,7 @@ const FlowCanvas: React.FC = () => {
 
             const newNode = {
                 id: `node_${Date.now()}`,
-                type: 'default', // Using default visual type for now
+                type: 'custom', // Use custom node type for premium UI
                 position,
                 data: {
                     label: label,
@@ -69,6 +74,7 @@ const FlowCanvas: React.FC = () => {
         <div className="flex-1 h-full" ref={reactFlowWrapper}>
             <ReactFlow
                 nodes={nodes}
+                nodeTypes={nodeTypes}
                 edges={edges}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
@@ -77,6 +83,7 @@ const FlowCanvas: React.FC = () => {
                 onDragOver={onDragOver}
                 onPaneClick={onPaneClick}
                 onNodeClick={onNodeClick}
+                onNodesDelete={onNodesDelete}
                 fitView
             >
                 <Background />

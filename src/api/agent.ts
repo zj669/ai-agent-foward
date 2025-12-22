@@ -13,3 +13,11 @@ export const getAgentDetail = async (agentId: string): Promise<AiAgent> => {
     // Use the new detail endpoint
     return request.get(`/client/agent/detail/${agentId}`);
 };
+
+export const publishAgent = async (agentId: string) => {
+    return request.post(`/client/agent/publish/${agentId}`);
+};
+
+export const getConversationIds = async (agentId: string): Promise<{ conversationId: string }[]> => {
+    return request.get(`/client/agent/conversations/${agentId}`);
+};
