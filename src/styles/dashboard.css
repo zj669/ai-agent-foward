@@ -287,3 +287,21 @@
 .dashboard-scroll::-webkit-scrollbar-thumb:hover {
     background: rgba(99, 102, 241, 0.5);
 }
+
+/* Tab Animation */
+@keyframes scaleInX {
+    from {
+        transform: scaleX(0);
+        opacity: 0;
+    }
+
+    to {
+        transform: scaleX(1);
+        opacity: 1;
+    }
+}
+
+.animate-scale-in-x {
+    animation: scaleInX 0.3s ease-out forwards;
+    transform-origin: left;
+}
