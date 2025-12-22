@@ -25,3 +25,7 @@ export const getConversationIds = async (agentId: string): Promise<{ conversatio
 export const getNewConversationId = async (): Promise<string> => {
     return request.get('/client/agent/newChat');
 };
+
+export const getChatHistory = async (conversationId: string): Promise<any[]> => {
+    return request.get(`/client/agent/chat/history/${conversationId}`);
+};
