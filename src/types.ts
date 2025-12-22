@@ -9,7 +9,7 @@ export enum AgentStepType {
 export interface StreamData {
   sessionId: string;
   content: string;
-  type: string; // The backend might send variations like "ANALYZER_1", so we treat as string but check includes
+  type: string;
   step: number;
   timestamp: number;
   completed?: boolean;
@@ -26,4 +26,16 @@ export interface AgentRequest {
   message: string;
   sessionId: string;
   maxStep: number;
+}
+
+export interface AiAgent {
+  id: number;
+  agentId: string;
+  agentName: string;
+  description: string;
+  channel: string;
+  status: number; // 0: Draft, 1: Published, 2: Disabled
+  createTime: string;
+  updateTime: string;
+  graphJson?: string; // Optional, might be large
 }

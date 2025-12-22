@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, Terminal, StopCircle, Sparkles, Activity, Trash2, Command, MessageSquare, History, Plus, ChevronDown } from 'lucide-react';
-import { LogEntryItem } from './components/LogEntryItem';
-import { ChatMessageBubble } from './components/ChatMessageBubble';
-import { fetchAgentStream } from './services/agentService';
-import { StreamData, ChatMessage } from './types';
+import { LogEntryItem } from '../components/LogEntryItem';
+import { ChatMessageBubble } from '../components/ChatMessageBubble';
+import { fetchAgentStream } from '../services/agentService';
+import { StreamData, ChatMessage } from '../types';
 
 // Constants
-const API_BASE_URL = 'http://localhost:8091';
+// 生产环境中应该使用相对路径或者配置的API地址
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const AGENT_ENDPOINT = '/api/v1/agent/auto_agent';
 const NEW_CHAT_ENDPOINT = '/api/v1/agent/newChat';
 const OLD_CHAT_ENDPOINT = '/api/v1/agent/oldChat';
@@ -30,10 +31,10 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [processLogs, setProcessLogs] = useState<StreamData[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { 
-        role: 'assistant', 
-        content: '您好！我是您的自主代理。我可以分析复杂任务、执行代码并提供总结结果。今天我能为您做些什么？', 
-        timestamp: Date.now() 
+    {
+      role: 'assistant',
+      content: '您好！我是您的自主代理。我可以分析复杂任务、执行代码并提供总结结果。今天我能为您做些什么？',
+      timestamp: Date.now()
     }
   ]);
   const [sessionId, setSessionId] = useState<string>('');
@@ -42,7 +43,7 @@ const App: React.FC = () => {
   const [showAgentSelector, setShowAgentSelector] = useState(false);
   const [agents, setAgents] = useState<AiAgent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AiAgent | null>(null);
-  
+
   // --- Refs for Scrolling ---
   const logsEndRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -51,7 +52,7 @@ const App: React.FC = () => {
   const agentRef = useRef<HTMLDivElement>(null);
 
   // --- Effects ---
-  
+
   // 初始化时获取新的会话ID和agent列表
   useEffect(() => {
     fetchNewSessionId();
@@ -78,14 +79,14 @@ const App: React.FC = () => {
   // Auto-scroll logs when new logs arrive
   useEffect(() => {
     if (logsEndRef.current) {
-        logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [processLogs]);
 
   // Auto-scroll chat when new messages arrive
   useEffect(() => {
     if (chatEndRef.current) {
-        chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [chatMessages.length]); // Scroll on new message count change
 
@@ -104,10 +105,10 @@ const App: React.FC = () => {
         setSessionId(data.data);
         // 重置聊天记录
         setChatMessages([
-          { 
-              role: 'assistant', 
-              content: '您好！我是您的自主代理。我可以分析复杂任务、执行代码并提供总结结果。今天我能为您做些什么？', 
-              timestamp: Date.now() 
+          {
+            role: 'assistant',
+            content: '您好！我是您的自主代理。我可以分析复杂任务、执行代码并提供总结结果。今天我能为您做些什么？',
+            timestamp: Date.now()
           }
         ]);
         setProcessLogs([]);
@@ -156,10 +157,10 @@ const App: React.FC = () => {
     setShowHistory(false);
     // 这里可以添加加载历史会话的逻辑
     setChatMessages([
-      { 
-          role: 'assistant', 
-          content: `已加载历史会话 ${historySessionId.slice(-6)}。请注意，当前界面仅用于演示，实际应用中应从服务器加载完整的历史记录。`, 
-          timestamp: Date.now() 
+      {
+        role: 'assistant',
+        content: `已加载历史会话 ${historySessionId.slice(-6)}。请注意，当前界面仅用于演示，实际应用中应从服务器加载完整的历史记录。`,
+        timestamp: Date.now()
       }
     ]);
     setProcessLogs([]);
@@ -186,7 +187,7 @@ const App: React.FC = () => {
     await fetchAgentStream(
       `${API_BASE_URL}${AGENT_ENDPOINT}`,
       {
-        aiAgentId: selectedAgent.agentId, 
+        aiAgentId: selectedAgent.agentId,
         message: userMsg,
         sessionId: sessionId,
         maxStep: 10
@@ -198,31 +199,31 @@ const App: React.FC = () => {
         // 2. 如果是摘要/最终答案，则添加到聊天(右侧面板)
         // 我们只希望在聊天视图中看到最终合成的答案
         if (data.type?.includes('SUMMARY_ASSISTANT') && data.content !== '执行完成' && !data.completed) {
-            setChatMessages(prev => {
-                const lastMsg = prev[prev.length - 1];
-                // 检查最后一条消息是否来自此流的助手消息
-                // 此逻辑取决于后端如何传输流数据。
-                // 如果后端逐个令牌传输摘要，我们需要更新最后一条消息。
-                // 如果后端一次性发送完整的摘要块(如原始代码所示)，我们则推送新的消息。
-                
-                // 基于原始代码片段，目前假设采用基于块的发送方式：
-                return [...prev, { role: 'assistant', content: data.content, timestamp: data.timestamp }];
-            });
+          setChatMessages(prev => {
+            const lastMsg = prev[prev.length - 1];
+            // 检查最后一条消息是否来自此流的助手消息
+            // 此逻辑取决于后端如何传输流数据。
+            // 如果后端逐个令牌传输摘要，我们需要更新最后一条消息。
+            // 如果后端一次性发送完整的摘要块(如原始代码所示)，我们则推送新的消息。
+
+            // 基于原始代码片段，目前假设采用基于块的发送方式：
+            return [...prev, { role: 'assistant', content: data.content, timestamp: data.timestamp }];
+          });
         }
       },
       (err) => {
         console.error("流错误", err);
         setProcessLogs(prev => [...prev, {
-            type: 'ERROR',
-            content: `连接错误: ${err.message}。请确保后端服务正在运行 ${API_BASE_URL}${AGENT_ENDPOINT}`,
-            step: 0,
-            timestamp: Date.now(),
-            sessionId: sessionId
+          type: 'ERROR',
+          content: `连接错误: ${err.message}。请确保后端服务正在运行 ${API_BASE_URL}${AGENT_ENDPOINT}`,
+          step: 0,
+          timestamp: Date.now(),
+          sessionId: sessionId
         }]);
         setChatMessages(prev => [...prev, {
-            role: 'assistant',
-            content: `**系统错误:** 连接到代理核心时遇到问题。请查看日志面板获取详细信息。`,
-            timestamp: Date.now()
+          role: 'assistant',
+          content: `**系统错误:** 连接到代理核心时遇到问题。请查看日志面板获取详细信息。`,
+          timestamp: Date.now()
         }]);
         setIsLoading(false);
       },
@@ -234,30 +235,30 @@ const App: React.FC = () => {
   };
 
   const clearLogs = () => {
-      setProcessLogs([]);
+    setProcessLogs([]);
   };
 
   return (
     <div className="flex h-screen w-full bg-slate-50 overflow-hidden font-sans text-slate-900">
-      
+
       {/* ================= 左侧面板: 内核日志 (大脑) ================= */}
       <div className="hidden md:flex w-5/12 lg:w-4/12 h-full bg-slate-950 flex-col border-r border-slate-800 shadow-2xl z-20">
-        
+
         {/* 头部 */}
         <div className="h-16 px-4 border-b border-slate-800 bg-slate-950 flex justify-between items-center shadow-md">
           <div className="flex items-center gap-3">
             <div className="p-1.5 bg-blue-900/30 rounded-md border border-blue-800/50">
-                <Terminal size={16} className="text-blue-400" />
+              <Terminal size={16} className="text-blue-400" />
             </div>
             <div>
-                <h2 className="text-sm font-bold tracking-wide text-slate-200">代理内核</h2>
-                <div className="flex items-center gap-1.5 opacity-60">
-                    <Activity size={10} className="text-emerald-500" />
-                    <span className="text-[10px] text-slate-400 font-mono uppercase">系统在线</span>
-                </div>
+              <h2 className="text-sm font-bold tracking-wide text-slate-200">代理内核</h2>
+              <div className="flex items-center gap-1.5 opacity-60">
+                <Activity size={10} className="text-emerald-500" />
+                <span className="text-[10px] text-slate-400 font-mono uppercase">系统在线</span>
+              </div>
             </div>
           </div>
-          <button 
+          <button
             onClick={clearLogs}
             className="text-slate-500 hover:text-slate-300 transition-colors p-2 rounded hover:bg-slate-900"
             title="清除日志"
@@ -265,61 +266,61 @@ const App: React.FC = () => {
             <Trash2 size={14} />
           </button>
         </div>
-        
+
         {/* 日志流内容 */}
         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar scroll-smooth bg-slate-950/50 relative">
-          
+
           {/* 背景装饰 */}
-          <div className="absolute inset-0 opacity-[0.02] pointer-events-none" 
-               style={{ backgroundImage: 'radial-gradient(#4f46e5 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
+          <div className="absolute inset-0 opacity-[0.02] pointer-events-none"
+            style={{ backgroundImage: 'radial-gradient(#4f46e5 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
           </div>
 
           {processLogs.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-700 space-y-4 select-none">
-               <div className="w-16 h-16 rounded-full border-2 border-slate-800 flex items-center justify-center">
-                 <Command size={24} />
-               </div>
-               <div className="text-center">
-                 <p className="text-xs font-mono uppercase tracking-widest mb-1">等待序列</p>
-                 <p className="text-[10px] text-slate-600">内部思维过程将在此处显示</p>
-               </div>
+              <div className="w-16 h-16 rounded-full border-2 border-slate-800 flex items-center justify-center">
+                <Command size={24} />
+              </div>
+              <div className="text-center">
+                <p className="text-xs font-mono uppercase tracking-widest mb-1">等待序列</p>
+                <p className="text-[10px] text-slate-600">内部思维过程将在此处显示</p>
+              </div>
             </div>
           ) : (
-             <div className="space-y-4">
-               {processLogs.map((log, idx) => (
-                 <LogEntryItem key={`${log.sessionId}-${idx}`} data={log} />
-               ))}
-               <div ref={logsEndRef} className="h-4" />
-             </div>
+            <div className="space-y-4">
+              {processLogs.map((log, idx) => (
+                <LogEntryItem key={`${log.sessionId}-${idx}`} data={log} />
+              ))}
+              <div ref={logsEndRef} className="h-4" />
+            </div>
           )}
         </div>
-        
+
         {/* 状态页脚 */}
         <div className="h-8 border-t border-slate-800 bg-slate-950 flex items-center px-4 justify-between text-[10px] text-slate-500 font-mono">
-            <span>会话: {sessionId ? sessionId.slice(-6) : '加载中...'}</span>
-            <span>内存: {processLogs.length * 0.4}KB</span>
+          <span>会话: {sessionId ? sessionId.slice(-6) : '加载中...'}</span>
+          <span>内存: {processLogs.length * 0.4}KB</span>
         </div>
       </div>
 
       {/* ================= 右侧面板: 聊天界面 (角色) ================= */}
       <div className="flex-1 h-full flex flex-col bg-white relative">
-        
+
         {/* 头部 */}
         <div className="h-16 px-6 border-b border-slate-100 bg-white/80 backdrop-blur-md sticky top-0 z-10 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${isLoading ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>
-                {isLoading ? <Sparkles size={18} className="animate-pulse" /> : <Bot size={18} />}
+              {isLoading ? <Sparkles size={18} className="animate-pulse" /> : <Bot size={18} />}
             </div>
             <div>
-                <h1 className="font-semibold text-slate-800 text-sm md:text-base">自动代理助手</h1>
-                <p className="text-xs text-slate-400 flex items-center gap-1">
-                   {isLoading ? (
-                       <>思考中 <span className="animate-bounce">.</span><span className="animate-bounce delay-75">.</span><span className="animate-bounce delay-150">.</span></>
-                   ) : '等待指令'}
-                </p>
+              <h1 className="font-semibold text-slate-800 text-sm md:text-base">自动代理助手</h1>
+              <p className="text-xs text-slate-400 flex items-center gap-1">
+                {isLoading ? (
+                  <>思考中 <span className="animate-bounce">.</span><span className="animate-bounce delay-75">.</span><span className="animate-bounce delay-150">.</span></>
+                ) : '等待指令'}
+              </p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2">
             {/* Agent选择器 */}
             <div className="relative" ref={agentRef}>
@@ -334,7 +335,7 @@ const App: React.FC = () => {
                 </span>
                 <ChevronDown size={16} />
               </button>
-              
+
               {/* Agent选择面板 */}
               {showAgentSelector && (
                 <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-slate-200 z-50">
@@ -350,9 +351,8 @@ const App: React.FC = () => {
                         <div
                           key={agent.id}
                           onClick={() => handleSelectAgent(agent)}
-                          className={`p-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 cursor-pointer transition-colors ${
-                            selectedAgent?.id === agent.id ? 'bg-indigo-50' : ''
-                          }`}
+                          className={`p-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 cursor-pointer transition-colors ${selectedAgent?.id === agent.id ? 'bg-indigo-50' : ''
+                            }`}
                         >
                           <div className="font-medium text-slate-800">{agent.agentName}</div>
                           <div className="text-xs text-slate-500 mt-1 line-clamp-2">{agent.description}</div>
@@ -367,7 +367,7 @@ const App: React.FC = () => {
                 </div>
               )}
             </div>
-            
+
             {/* 历史记录按钮 */}
             <div className="relative" ref={historyRef}>
               <button
@@ -382,7 +382,7 @@ const App: React.FC = () => {
                 <History size={16} />
                 <span className="hidden sm:inline">历史记录</span>
               </button>
-              
+
               {/* 历史记录面板 */}
               {showHistory && (
                 <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-slate-200 z-50">
@@ -455,7 +455,7 @@ const App: React.FC = () => {
               disabled={isLoading || !input.trim() || !sessionId || !selectedAgent}
               className={`absolute right-2 top-2 bottom-2 aspect-square rounded-lg flex items-center justify-center transition-all duration-200
                 ${isLoading || !input.trim() || !sessionId || !selectedAgent
-                  ? 'bg-transparent text-slate-300 cursor-not-allowed' 
+                  ? 'bg-transparent text-slate-300 cursor-not-allowed'
                   : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md hover:shadow-lg transform hover:-translate-y-0.5'}`}
             >
               {isLoading ? <StopCircle size={20} className="animate-spin-slow" /> : <Send size={20} />}
