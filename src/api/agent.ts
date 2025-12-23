@@ -18,6 +18,10 @@ export const publishAgent = async (agentId: string) => {
     return request.post(`/client/agent/publish/${agentId}`);
 };
 
+export const deleteAgent = async (agentId: string): Promise<void> => {
+    return request.delete(`/client/agent/${agentId}`);
+};
+
 export const getConversationIds = async (agentId: string): Promise<{ conversationId: string }[]> => {
     return request.get(`/client/agent/conversations/${agentId}`);
 };

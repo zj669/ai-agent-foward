@@ -24,7 +24,7 @@ import {
     UserOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { getAgentList, publishAgent } from '@/api/agent';
+import { getAgentList, publishAgent, deleteAgent } from '@/api/agent';
 import { logout } from '@/api/user';
 import { AiAgent } from '@/types';
 import '../styles/dashboard.css';
@@ -137,6 +137,26 @@ const Dashboard: React.FC = () => {
                     loadAgents();
                 } catch (error) {
                     message.error('发布失败');
+                }
+            }
+        });
+    };
+
+    const handleDelete = async (agentId: string, agentName: string) => {
+        Modal.confirm({
+            title: '确认删除',
+            icon: <DeleteOutlined className="text-red-500" />,
+            content: `确定要删除 Agent "${agentName}" 吗？此操作不可恢复。`,
+            okText: '确认删除',
+            okType: 'danger',
+            cancelText: '取消',
+            onOk: async () => {
+                try {
+                    await deleteAgent(agentId);
+                    message.success('删除成功');
+                    loadAgents();
+                } catch (error: any) {
+                    message.error(error.message || '删除失败');
                 }
             }
         });
@@ -508,6 +528,9 @@ const Dashboard: React.FC = () => {
                                                     )}
                                                     <Tooltip title="编辑">
                                                         <Button type="text" shape="circle" icon={<EditOutlined />} className="text-gray-600 hover:bg-gray-100" onClick={(e) => { e.stopPropagation(); handleEdit(agent.agentId); }} />
+                                                    </Tooltip>
+                                                    <Tooltip title="删除">
+                                                        <Button type="text" shape="circle" icon={<DeleteOutlined />} className="text-red-500 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); handleDelete(agent.agentId, agent.agentName); }} />
                                                     </Tooltip>
                                                 </div>
                                             </div>
