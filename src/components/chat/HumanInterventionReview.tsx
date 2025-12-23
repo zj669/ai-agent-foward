@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Card, Button, Input, Space, Typography, message, Spin } from 'antd';
-import { CheckOutlined, CloseOutlined, EditOutlined } from '@ant-design/icons';
+import { CheckOutlined, CloseOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { submitReview } from '../../api/agent';
+import SnapshotViewer from './SnapshotViewer';
 
 const { TextArea } = Input;
 const { Text, Title } = Typography;
@@ -29,6 +30,7 @@ const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
     const [comments, setComments] = useState('');
     const [modifiedOutput, setModifiedOutput] = useState(currentOutput);
     const [showModify, setShowModify] = useState(false);
+    const [showSnapshot, setShowSnapshot] = useState(false);
 
     const handleReview = async (approved: boolean) => {
         setLoading(true);
@@ -107,6 +109,7 @@ const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
                         </>
                     )}
 
+
                     {/* 备注 */}
                     <Input
                         placeholder="审核备注（可选）"
@@ -114,8 +117,24 @@ const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
                         onChange={(e) => setComments(e.target.value)}
                     />
 
+                    {/* 快照查看/编辑 */}
+                    <div style={{ marginTop: 8 }}>
+                        <Button
+                            type="link"
+                            onClick={() => setShowSnapshot(!showSnapshot)}
+                            style={{ padding: 0, height: 'auto' }}
+                            icon={showSnapshot ? <span /> : <EyeOutlined />}
+                        >
+                            {showSnapshot ? '收起执行上下文详情' : '查看/编辑执行上下文'}
+                        </Button>
+
+                        {showSnapshot && (
+                            <SnapshotViewer conversationId={conversationId} />
+                        )}
+                    </div>
+
                     {/* 操作按钮 */}
-                    <Space>
+                    <Space style={{ marginTop: 16 }}>
                         <Button
                             type="primary"
                             icon={<CheckOutlined />}

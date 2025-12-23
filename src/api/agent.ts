@@ -75,3 +75,20 @@ export const updateExecutionContext = async (
 ): Promise<void> => {
     return request.put(`/client/agent/context/${conversationId}`, { modifications });
 };
+
+// --- Snapshot APIs ---
+
+import { ExecutionContextSnapshot, SnapshotModifications } from '@/types/snapshot';
+
+/** 获取完整快照 */
+export const getContextSnapshot = async (conversationId: string): Promise<ExecutionContextSnapshot> => {
+    return request.get(`/client/agent/snapshot/${conversationId}`);
+};
+
+/** 更新快照可编辑字段 */
+export const updateContextSnapshot = async (
+    conversationId: string,
+    modifications: SnapshotModifications
+): Promise<void> => {
+    return request.put(`/client/agent/snapshot/${conversationId}`, { modifications });
+};
