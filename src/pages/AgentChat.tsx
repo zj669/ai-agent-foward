@@ -735,7 +735,7 @@ const AgentChat: React.FC = () => {
                         </div>
 
                         {/* Input Area */}
-                        <div className="p-6 bg-gradient-to-t from-[#f8fafc] via-[#f8fafc] to-transparent shrink-0">
+                        <div className="p-6 bg-gradient-to-t from-[#111827] via-[#111827] to-transparent shrink-0">
                             <div className="max-w-3xl mx-auto relative chat-input-container">
                                 <Input.TextArea
                                     value={input}
@@ -748,7 +748,7 @@ const AgentChat: React.FC = () => {
                                     }}
                                     autoSize={{ minRows: 1, maxRows: 6 }}
                                     placeholder="输入消息以开始对话..."
-                                    className="!pr-24 !py-3 !px-4 !bg-white/80 !border !border-gray-200 !text-base resize-none !shadow-sm focus:!shadow-md focus:!border-blue-300 transition-all rounded-2xl placeholder:text-gray-400"
+                                    className="!pr-24 !py-3 !px-4 !bg-black/20 !border !border-white/10 !text-slate-200 !text-base resize-none !shadow-sm focus:!shadow-md focus:!border-indigo-500/50 transition-all rounded-2xl placeholder:!text-slate-500"
                                 />
                                 <div className="absolute bottom-2.5 right-2.5 flex gap-2">
                                     {loading && !interventionState?.isPaused ? (
