@@ -10,32 +10,7 @@ import {
     BugOutlined,
     LoadingOutlined
 } from '@ant-design/icons';
-import llmIcon from '@/assets/icons/llm.svg';
-import codeIcon from '@/assets/icons/code.svg';
-import apiIcon from '@/assets/icons/api.svg';
-import routerIcon from '@/assets/icons/router.svg';
-import humanIcon from '@/assets/icons/human.svg';
-import planIcon from '@/assets/icons/plan.svg';
-import reactIcon from '@/assets/icons/react.svg';
-import actIcon from '@/assets/icons/act.svg';
-
-// Map icon strings to images
-const getIcon = (iconName: string) => {
-    if (!iconName) return <img src={codeIcon} className="w-5 h-5 opacity-50" />;
-    const name = iconName.toLowerCase();
-
-    if (name.includes('llm')) return <img src={llmIcon} className="w-6 h-6" />;
-    if (name.includes('code')) return <img src={codeIcon} className="w-6 h-6" />;
-    if (name.includes('api')) return <img src={apiIcon} className="w-6 h-6" />;
-    if (name.includes('router')) return <img src={routerIcon} className="w-6 h-6" />;
-
-    if (name.includes('act')) return <img src={actIcon} className="w-6 h-6" />;
-    if (name.includes('human')) return <img src={humanIcon} className="w-6 h-6" />;
-    if (name.includes('plan')) return <img src={planIcon} className="w-6 h-6" />;
-    if (name.includes('react')) return <img src={reactIcon} className="w-6 h-6" />;
-
-    return <img src={codeIcon} className="w-6 h-6 opacity-50" />;
-};
+import { getIcon } from './nodeIcons';
 
 // Define colors based on type
 const getTypeStyle = (type: string) => {

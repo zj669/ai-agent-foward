@@ -1,5 +1,5 @@
 import React from 'react';
-import { RobotOutlined } from '@ant-design/icons';
+import { RobotOutlined, ThunderboltFilled, BulbFilled, RocketFilled } from '@ant-design/icons';
 
 interface EmptyStateProps {
     agentName: string;
@@ -8,37 +8,50 @@ interface EmptyStateProps {
 
 const EmptyState: React.FC<EmptyStateProps> = ({ agentName, agentDesc }) => {
     return (
-        <div className="mt-20 flex flex-col items-center justify-center text-gray-400 gap-6 animate-fadeIn">
+        <div className="mt-16 flex flex-col items-center justify-center gap-8 animate-fadeIn px-4">
+            {/* Premium Avatar */}
             <div className="relative">
-                <div className="w-24 h-24 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-full flex items-center justify-center text-4xl shadow-lg border-2 border-white">
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
-                        <RobotOutlined />
-                    </span>
+                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center text-4xl shadow-xl shadow-indigo-500/30">
+                    <RobotOutlined className="text-white drop-shadow-lg" />
                 </div>
-                <div className="absolute -bottom-2 -right-2 bg-white px-3 py-1 rounded-full shadow-md text-xs font-bold text-blue-600 border border-blue-50">
-                    AI
+                {/* Status Badge */}
+                <div className="absolute -bottom-2 -right-2 bg-gradient-to-r from-emerald-400 to-teal-500 px-2.5 py-1 rounded-full shadow-lg text-xs font-bold text-white border-2 border-slate-800 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+                    Online
                 </div>
             </div>
 
-            <div className="text-center max-w-md px-4">
-                <h3 className="font-bold text-gray-800 text-xl mb-2 bg-clip-text text-transparent bg-gradient-to-r from-gray-800 to-gray-600">
-                    你好，我是 {agentName}
-                </h3>
-                <p className="text-gray-500 leading-relaxed text-sm">
-                    {agentDesc || '我已准备好协助你，请发送消息开始对话。'}
+            {/* Title & Description */}
+            <div className="text-center max-w-lg">
+                <h2 className="font-extrabold text-2xl md:text-3xl mb-3 text-slate-100">
+                    Hello, I'm <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">{agentName}</span>
+                </h2>
+                <p className="text-slate-400 leading-relaxed text-base">
+                    {agentDesc || 'I\'m ready to assist you with complex tasks. Send a message to get started!'}
                 </p>
             </div>
 
-            <div className="flex gap-3 text-xs text-gray-400 mt-4">
-                <span className="bg-white px-3 py-1.5 rounded-full border border-gray-100 shadow-sm text-blue-600 bg-opacity-60 backdrop-blur-sm">
-                    ✨ 任务规划
-                </span>
-                <span className="bg-white px-3 py-1.5 rounded-full border border-gray-100 shadow-sm text-purple-600 bg-opacity-60 backdrop-blur-sm">
-                    ⚡ 高效执行
-                </span>
-                <span className="bg-white px-3 py-1.5 rounded-full border border-gray-100 shadow-sm text-indigo-600 bg-opacity-60 backdrop-blur-sm">
-                    🧠 智能分析
-                </span>
+            {/* Capability Pills */}
+            <div className="flex flex-wrap justify-center gap-3 mt-2">
+                <div className="group flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800/50 backdrop-blur-sm border border-slate-700 shadow-sm hover:border-indigo-500/50 transition-all cursor-default">
+                    <BulbFilled className="text-amber-400 text-base" />
+                    <span className="text-sm font-medium text-slate-300">Smart Planning</span>
+                </div>
+                <div className="group flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800/50 backdrop-blur-sm border border-slate-700 shadow-sm hover:border-purple-500/50 transition-all cursor-default">
+                    <ThunderboltFilled className="text-purple-400 text-base" />
+                    <span className="text-sm font-medium text-slate-300">Fast Execution</span>
+                </div>
+                <div className="group flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800/50 backdrop-blur-sm border border-slate-700 shadow-sm hover:border-emerald-500/50 transition-all cursor-default">
+                    <RocketFilled className="text-emerald-400 text-base" />
+                    <span className="text-sm font-medium text-slate-300">Multi-Agent</span>
+                </div>
+            </div>
+
+            {/* Prompt Hint */}
+            <div className="mt-4 px-5 py-3 rounded-xl bg-slate-800/30 backdrop-blur-sm border border-slate-700/50 text-center max-w-md">
+                <p className="text-sm text-slate-400">
+                    💬 <span className="font-medium text-slate-300">Try asking:</span> "Help me analyze this data" or "Create a summary report"
+                </p>
             </div>
         </div>
     );

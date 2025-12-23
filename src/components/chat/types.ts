@@ -40,3 +40,32 @@ export interface ChatMessage {
         percentage: number;
     };
 }
+
+// DAG Visualization Types
+export interface DagNode {
+    id: string;
+    type: string;
+    position: { x: number; y: number };
+    data: {
+        label: string;
+        nodeType: string;
+        [key: string]: any;
+    };
+}
+
+export interface DagEdge {
+    id: string;
+    source: string;
+    target: string;
+    type?: string;
+    animated?: boolean;
+    data?: any;
+}
+
+export interface DagVisualizationState {
+    nodes: DagNode[];
+    edges: DagEdge[];
+    activeNodeId: string | null;
+    completedNodeIds: string[];
+    errorNodeId: string | null;
+}

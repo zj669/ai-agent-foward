@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
-import { Card, Button, Input, Space, Typography, message, Spin } from 'antd';
-import { CheckOutlined, CloseOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
-import { submitReview } from '../../api/agent';
+import { Card, Button, Space, Typography, message, Spin } from 'antd';
+import { CheckOutlined, CloseOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 import SnapshotViewer from './SnapshotViewer';
 
-const { TextArea } = Input;
 const { Text, Title } = Typography;
 
 interface HumanInterventionReviewProps {
@@ -12,9 +10,7 @@ interface HumanInterventionReviewProps {
     nodeId: string;
     nodeName: string;
     checkMessage: string;
-    allowModifyOutput?: boolean;
-    currentOutput?: string;
-    onReview: (data: { approved: boolean; comments?: string; modifiedOutput?: string }) => Promise<void>;
+    onReview: (data: { approved: boolean }) => Promise<void>;
 }
 
 const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
@@ -22,30 +18,17 @@ const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
     nodeId,
     nodeName,
     checkMessage,
-    allowModifyOutput = false,
-    currentOutput = '',
     onReview
 }) => {
     const [loading, setLoading] = useState(false);
-    const [comments, setComments] = useState('');
-    const [modifiedOutput, setModifiedOutput] = useState(currentOutput);
-    const [showModify, setShowModify] = useState(false);
     const [showSnapshot, setShowSnapshot] = useState(false);
 
     const handleReview = async (approved: boolean) => {
         setLoading(true);
         try {
-            await onReview({
-                approved,
-                comments: comments || undefined,
-                modifiedOutput: showModify && modifiedOutput !== currentOutput
-                    ? modifiedOutput
-                    : undefined
-            });
+            await onReview({ approved });
             message.success(approved ? '已批准，正在恢复执行...' : '已拒绝');
         } catch (error) {
-            // Error is handled by parent usually, but we catch here to stop loading
-            // message.error('审核提交失败');
             console.error('Review failed:', error);
         } finally {
             setLoading(false);
@@ -57,89 +40,63 @@ const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
             className="human-intervention-review"
             style={{
                 margin: '12px 0',
-                borderColor: '#faad14',
-                backgroundColor: '#fffbe6'
+                background: 'linear-gradient(135deg, rgba(250, 173, 20, 0.15) 0%, rgba(250, 173, 20, 0.05) 100%)',
+                border: '1px solid rgba(250, 173, 20, 0.3)',
+                borderRadius: 12,
+                backdropFilter: 'blur(10px)'
             }}
+            bodyStyle={{ padding: '16px 20px' }}
         >
             <Spin spinning={loading}>
-                <Space direction="vertical" style={{ width: '100%' }}>
+                <Space direction="vertical" style={{ width: '100%' }} size="middle">
                     {/* 标题 */}
-                    <Title level={5} style={{ margin: 0, color: '#d48806' }}>
-                        ⏸️ 人工介入 - {nodeName}
-                    </Title>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 20 }}>⏸️</span>
+                        <Title level={5} style={{ margin: 0, color: '#d48806' }}>
+                            人工介入 - {nodeName}
+                        </Title>
+                    </div>
 
                     {/* 审核提示 */}
-                    <Text>{checkMessage}</Text>
-
-                    {/* 当前输出预览 */}
-                    {currentOutput && (
-                        <div style={{
-                            padding: '8px 12px',
-                            backgroundColor: '#fafafa',
-                            borderRadius: 4,
-                            maxHeight: 200,
-                            overflow: 'auto'
-                        }}>
-                            <Text type="secondary">当前输出:</Text>
-                            <pre style={{ margin: '4px 0 0', whiteSpace: 'pre-wrap' }}>
-                                {currentOutput}
-                            </pre>
-                        </div>
-                    )}
-
-                    {/* 修改输出 */}
-                    {allowModifyOutput && (
-                        <>
-                            {!showModify ? (
-                                <Button
-                                    icon={<EditOutlined />}
-                                    onClick={() => setShowModify(true)}
-                                    size="small"
-                                >
-                                    修改输出
-                                </Button>
-                            ) : (
-                                <TextArea
-                                    value={modifiedOutput}
-                                    onChange={(e) => setModifiedOutput(e.target.value)}
-                                    placeholder="输入修改后的输出内容"
-                                    rows={4}
-                                />
-                            )}
-                        </>
-                    )}
-
-
-                    {/* 备注 */}
-                    <Input
-                        placeholder="审核备注（可选）"
-                        value={comments}
-                        onChange={(e) => setComments(e.target.value)}
-                    />
+                    <Text style={{ fontSize: 14, lineHeight: 1.6 }}>{checkMessage}</Text>
 
                     {/* 快照查看/编辑 */}
-                    <div style={{ marginTop: 8 }}>
+                    <div>
                         <Button
-                            type="link"
+                            type="text"
                             onClick={() => setShowSnapshot(!showSnapshot)}
-                            style={{ padding: 0, height: 'auto' }}
-                            icon={showSnapshot ? <span /> : <EyeOutlined />}
+                            style={{
+                                padding: '4px 0',
+                                height: 'auto',
+                                color: '#1890ff'
+                            }}
+                            icon={showSnapshot ? <EyeInvisibleOutlined /> : <EyeOutlined />}
                         >
-                            {showSnapshot ? '收起执行上下文详情' : '查看/编辑执行上下文'}
+                            {showSnapshot ? '收起执行上下文' : '查看/编辑执行上下文'}
                         </Button>
 
                         {showSnapshot && (
-                            <SnapshotViewer conversationId={conversationId} />
+                            <div style={{ marginTop: 12 }}>
+                                <SnapshotViewer conversationId={conversationId} />
+                            </div>
                         )}
                     </div>
 
                     {/* 操作按钮 */}
-                    <Space style={{ marginTop: 16 }}>
+                    <Space style={{ marginTop: 8 }} size="middle">
                         <Button
                             type="primary"
                             icon={<CheckOutlined />}
                             onClick={() => handleReview(true)}
                             disabled={loading}
+                            style={{
+                                background: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
+                                border: 'none',
+                                borderRadius: 6,
+                                height: 36,
+                                paddingLeft: 20,
+                                paddingRight: 20
+                            }}
                         >
                             批准
                         </Button>
@@ -148,6 +105,12 @@ const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
                             icon={<CloseOutlined />}
                             onClick={() => handleReview(false)}
                             disabled={loading}
+                            style={{
+                                borderRadius: 6,
+                                height: 36,
+                                paddingLeft: 20,
+                                paddingRight: 20
+                            }}
                         >
                             拒绝
                         </Button>
@@ -159,3 +122,4 @@ const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
 };
 
 export default HumanInterventionReview;
+
