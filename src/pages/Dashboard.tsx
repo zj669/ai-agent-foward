@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Input, Button, Spin, Empty, Modal, message, Tooltip } from 'antd';
+import { Input, Button, Spin, Empty, Modal, message, Tooltip, Dropdown, Avatar } from 'antd';
 import { LoadingOutlined } from '@ant-design/icons';
+import type { MenuProps } from 'antd';
 import {
     PlusOutlined,
     SearchOutlined,
@@ -18,10 +19,13 @@ import {
     ReadOutlined,
     DatabaseOutlined,
     FilePdfOutlined,
-    FileMarkdownOutlined
+    FileMarkdownOutlined,
+    LogoutOutlined,
+    UserOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { getAgentList, publishAgent } from '@/api/agent';
+import { logout } from '@/api/user';
 import { AiAgent } from '@/types';
 import '../styles/dashboard.css';
 
@@ -130,6 +134,58 @@ const Dashboard: React.FC = () => {
         });
     };
 
+    const handleLogout = async () => {
+        Modal.confirm({
+            title: '确认退出',
+            icon: <LogoutOutlined className="text-orange-500" />,
+            content: '确定要退出登录吗？',
+            okText: '确认退出',
+            okButtonProps: { danger: true },
+            onOk: async () => {
+                try {
+                    await logout();
+                    message.success('已退出登录');
+                    // 清除本地存储的token
+                    localStorage.removeItem('token');
+                    // 跳转到登录页
+                    navigate('/login');
+                } catch (error) {
+                    console.error('退出登录失败', error);
+                    // 即使API调用失败，也清除本地token并跳转
+                    localStorage.removeItem('token');
+                    navigate('/login');
+                }
+            }
+        });
+    };
+
+    // 用户下拉菜单项
+    const userMenuItems: MenuProps['items'] = [
+        {
+            key: 'user-info',
+            label: (
+                <div className="px-1 py-2">
+                    <div className="font-semibold text-gray-800">用户</div>
+                    <div className="text-xs text-gray-400">欢迎使用 AI Workbench</div>
+                </div>
+            ),
+            disabled: true,
+        },
+        { type: 'divider' },
+        {
+            key: 'settings',
+            icon: <SettingOutlined />,
+            label: '账户设置',
+        },
+        { type: 'divider' },
+        {
+            key: 'logout',
+            icon: <LogoutOutlined />,
+            label: <span className="text-red-500">退出登录</span>,
+            onClick: handleLogout,
+        },
+    ];
+
     const filteredAgents = agents.filter(agent => {
         const matchesStatus = filterStatus === 'all' || agent.status === filterStatus;
         const matchesSearch = agent.agentName.toLowerCase().includes(searchText.toLowerCase()) ||
@@ -190,9 +246,16 @@ const Dashboard: React.FC = () => {
                         <Tooltip title="设置">
                             <Button type="text" shape="circle" icon={<SettingOutlined />} className="text-gray-500 hover:text-indigo-600 hover:bg-indigo-50" />
                         </Tooltip>
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md cursor-pointer hover:scale-105 transition-transform">
-                            U
-                        </div>
+                        <Dropdown
+                            menu={{ items: userMenuItems }}
+                            placement="bottomRight"
+                            trigger={['click']}
+                            overlayClassName="user-dropdown"
+                        >
+                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md cursor-pointer hover:scale-105 transition-transform hover:shadow-lg">
+                                <UserOutlined />
+                            </div>
+                        </Dropdown>
                     </div>
                 </div>
             </div>
