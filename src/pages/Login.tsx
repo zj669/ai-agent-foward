@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Card, Input, Button, message, Form } from 'antd';
-import { LockOutlined, MailOutlined } from '@ant-design/icons';
+import { Input, Button, message, Form } from 'antd';
+import { LockOutlined, MailOutlined, ThunderboltOutlined, TeamOutlined, RocketOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import request from '@/utils/request';
+import '../styles/login.css';
 
 const loginSchema = z.object({
     email: z.string().email('请输入有效的邮箱地址'),
@@ -17,9 +19,25 @@ type LoginFormByType = z.infer<typeof loginSchema>;
 const Login: React.FC = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
+    const [sloganText, setSloganText] = useState('');
+    const fullSlogan = "构建下一代智能体工作流";
+
     const { control, handleSubmit, formState: { errors } } = useForm<LoginFormByType>({
         resolver: zodResolver(loginSchema),
     });
+
+    // Slogan typing effect
+    useEffect(() => {
+        let index = 0;
+        const timer = setInterval(() => {
+            setSloganText(fullSlogan.slice(0, index));
+            index++;
+            if (index > fullSlogan.length) {
+                clearInterval(timer);
+            }
+        }, 100);
+        return () => clearInterval(timer);
+    }, []);
 
     const onSubmit = async (data: LoginFormByType) => {
         setLoading(true);
@@ -29,15 +47,11 @@ const Login: React.FC = () => {
                 password: data.password
             });
 
-            // Assuming res contains token directly or inside data object depending on request.ts interceptor
-            // request.ts interceptor returns `data` from `{code, info, data}`.
-            // So `res` is the payload.
             if (res && res.token) {
                 localStorage.setItem('token', res.token);
                 message.success('登录成功');
                 navigate('/dashboard');
             } else {
-                // Fallback if token is elsewhere
                 message.error('登录失败: 未获取到Token');
             }
         } catch (error: any) {
@@ -49,30 +63,103 @@ const Login: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-4 relative overflow-hidden">
-            {/* Background Decoration */}
-            <div className="absolute top-0 left-0 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
-            <div className="absolute bottom-0 right-0 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl translate-x-1/2 translate-y-1/2 pointer-events-none" />
+        <div className="min-h-screen w-full flex bg-slate-900 overflow-hidden relative font-sans">
+            {/* Background Particles (Abstract) */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                {[...Array(20)].map((_, i) => (
+                    <div
+                        key={i}
+                        className="particle opacity-20"
+                        style={{
+                            left: `${Math.random() * 100}%`,
+                            top: `${Math.random() * 100}%`,
+                            width: `${Math.random() * 4 + 1}px`,
+                            height: `${Math.random() * 4 + 1}px`,
+                            animationDelay: `${Math.random() * 5}s`,
+                            backgroundColor: i % 2 === 0 ? '#6366f1' : '#8b5cf6'
+                        }}
+                    />
+                ))}
+            </div>
 
-            <div className="w-full max-w-md relative z-10">
-                <Card
-                    bordered={false}
-                    className="shadow-2xl rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 overflow-hidden"
-                    bodyStyle={{ padding: '40px 32px' }}
-                >
-                    <div className="text-center mb-10">
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-purple-600 shadow-lg mb-6 transform rotate-3 hover:rotate-6 transition-transform duration-300">
-                            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            {/* Left Section - Brand & Features */}
+            <div className="hidden lg:flex lg:w-[50%] relative flex-col justify-between p-16 text-white z-10">
+
+                {/* Logo Area */}
+                <div className="flex items-center gap-3 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+                    <div className="w-12 h-12 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg brand-logo-glow">
+                        <RocketOutlined className="text-2xl" />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight">AI Workbench</h1>
+                        <span className="text-indigo-300 text-xs font-medium tracking-widest uppercase">Enterprise Edition</span>
+                    </div>
+                </div>
+
+                {/* Hero Content */}
+                <div className="max-w-xl">
+                    <h2 className="text-5xl font-bold mb-6 leading-tight typing-cursor min-h-[1.2em]">
+                        {sloganText}
+                    </h2>
+                    <p className="text-lg text-slate-300 mb-10 leading-relaxed font-light opacity-0 animate-fade-in-up" style={{ animationDelay: '1s', animationFillMode: 'forwards' }}>
+                        释放 AI 的无限潜能。通过可视化的工作流编排，轻松构建、测试和部署强大的智能代理系统。
+                    </p>
+
+                    <div className="space-y-6">
+                        <div className="feature-item flex items-center gap-4 bg-white/5 backdrop-blur-sm p-4 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors cursor-default">
+                            <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                                <ThunderboltOutlined className="text-xl" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-white text-lg">可视化编排</h3>
+                                <p className="text-slate-400 text-sm">拖拽式节点设计，所见即所得</p>
+                            </div>
                         </div>
-                        <h1 className="text-3xl font-bold text-white tracking-tight">欢迎回来</h1>
-                        <p className="mt-3 text-slate-400">登录您的 AI Agent 平台账号</p>
+
+                        <div className="feature-item flex items-center gap-4 bg-white/5 backdrop-blur-sm p-4 rounded-2xl border border-white/10 hover:bg-white/10 transition-colors cursor-default">
+                            <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400">
+                                <TeamOutlined className="text-xl" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-white text-lg">多人实时协作</h3>
+                                <p className="text-slate-400 text-sm">团队成员无缝配合，即时同步</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer Copyright */}
+                <div className="text-slate-500 text-sm opacity-0 animate-fade-in-up" style={{ animationDelay: '2.5s', animationFillMode: 'forwards' }}>
+                    &copy; {new Date().getFullYear()} AI Workbench. Created with ❤️ for Developers.
+                </div>
+            </div>
+
+            {/* Right Section - Login Form */}
+            <div className="w-full lg:w-[50%] flex items-center justify-center p-8 z-20 h-full">
+                <div className="w-full max-w-md bg-white/5 backdrop-blur-2xl border border-white/10 p-10 rounded-3xl shadow-2xl relative overflow-hidden animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+
+                    {/* Decorative top gradient */}
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+
+                    {/* Mobile Logo Show */}
+                    <div className="lg:hidden text-center mb-10">
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 shadow-lg mb-4">
+                            <RocketOutlined className="text-3xl text-white" />
+                        </div>
+                        <h1 className="text-3xl font-bold text-white">欢迎回来</h1>
+                        <p className="text-slate-400 mt-2">登录您的 AI Workbench 账号</p>
                     </div>
 
-                    <Form onFinish={handleSubmit(onSubmit)} layout="vertical" size="large">
+                    <div className="text-left mb-8 hidden lg:block">
+                        <h2 className="text-3xl font-bold text-white mb-2">欢迎回来 👋</h2>
+                        <p className="text-slate-400">请输入您的账号信息以继续访问</p>
+                    </div>
+
+                    <Form onFinish={handleSubmit(onSubmit)} layout="vertical" size="large" className="space-y-4">
                         <Form.Item
                             validateStatus={errors.email ? 'error' : ''}
                             help={errors.email?.message}
-                            className="mb-6"
+                            label={<span className="text-slate-300 font-medium ml-1">邮箱地址</span>}
                         >
                             <Controller
                                 name="email"
@@ -80,9 +167,9 @@ const Login: React.FC = () => {
                                 render={({ field }) => (
                                     <Input
                                         {...field}
-                                        prefix={<MailOutlined className="text-slate-400 text-lg mr-2" />}
-                                        placeholder="邮箱地址"
-                                        className="bg-black/20 border-white/10 text-white placeholder:text-slate-500 hover:border-blue-500/50 focus:border-blue-500 hover:bg-black/30 focus:bg-black/30 transition-all rounded-xl h-12"
+                                        prefix={<MailOutlined className="text-slate-400 mr-2" />}
+                                        placeholder="name@company.com"
+                                        className="rounded-xl h-12 bg-black/20 border-white/10 text-white placeholder:text-slate-500 focus:border-indigo-500 hover:border-indigo-400/50 transition-all font-medium"
                                     />
                                 )}
                             />
@@ -91,7 +178,8 @@ const Login: React.FC = () => {
                         <Form.Item
                             validateStatus={errors.password ? 'error' : ''}
                             help={errors.password?.message}
-                            className="mb-8"
+                            label={<span className="text-slate-300 font-medium ml-1">密码</span>}
+                            className="mb-6"
                         >
                             <Controller
                                 name="password"
@@ -99,42 +187,59 @@ const Login: React.FC = () => {
                                 render={({ field }) => (
                                     <Input.Password
                                         {...field}
-                                        prefix={<LockOutlined className="text-slate-400 text-lg mr-2" />}
-                                        placeholder="密码"
-                                        className="bg-black/20 border-white/10 text-white placeholder:text-slate-500 hover:border-blue-500/50 focus:border-blue-500 hover:bg-black/30 focus:bg-black/30 transition-all rounded-xl h-12"
+                                        prefix={<LockOutlined className="text-slate-400 mr-2" />}
+                                        placeholder="••••••••"
+                                        className="rounded-xl h-12 bg-black/20 border-white/10 text-white placeholder:text-slate-500 focus:border-indigo-500 hover:border-indigo-400/50 transition-all font-medium"
                                     />
                                 )}
                             />
                         </Form.Item>
 
-                        <Form.Item className="mb-6">
+                        <div className="flex items-center justify-between mb-6 text-sm">
+                            <label className="flex items-center gap-2 cursor-pointer text-slate-400 hover:text-slate-300">
+                                <input type="checkbox" className="rounded border-slate-600 bg-transparent text-indigo-500 focus:ring-indigo-500 focus:ring-offset-slate-900" />
+                                <span>记住我</span>
+                            </label>
+                            <a href="#" className="font-medium text-indigo-400 hover:text-indigo-300">忘记密码？</a>
+                        </div>
+
+                        <Form.Item>
                             <Button
                                 type="primary"
                                 htmlType="submit"
                                 block
                                 size="large"
                                 loading={loading}
-                                className="h-12 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 border-none shadow-lg shadow-blue-900/30 hover:shadow-blue-900/50 hover:scale-[1.02] active:scale-[0.98] transition-all font-semibold text-lg"
+                                className="h-12 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 border-none shadow-lg shadow-indigo-500/30 transform hover:-translate-y-0.5 transition-all duration-200 font-bold text-lg"
                             >
                                 登 录
                             </Button>
                         </Form.Item>
+                    </Form>
 
-                        <div className="text-center">
-                            <span className="text-slate-500">还没有账号？</span>
-                            <Link to="/register" className="ml-2 text-blue-400 hover:text-blue-300 font-medium transition-colors">
+                    <div className="mt-8 text-center">
+                        <p className="text-slate-400">
+                            还没有账号？
+                            <Link to="/register" className="ml-2 font-semibold text-indigo-400 hover:text-indigo-300 transition-colors">
                                 立即注册
                             </Link>
-                        </div>
-                    </Form>
-                </Card>
+                        </p>
+                    </div>
 
-                <div className="text-center mt-8 text-slate-600 text-sm">
-                    &copy; {new Date().getFullYear()} AutoAgent Platform. All rights reserved.
+                    {/* Social Login Divider (Visual Only) */}
+                    <div className="mt-8 relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-white/10"></div>
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                            <span className="px-4 bg-transparent text-slate-500">或通过以下方式登录</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     );
 };
+
 
 export default Login;

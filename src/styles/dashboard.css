@@ -301,7 +301,69 @@
     }
 }
 
-.animate-scale-in-x {
-    animation: scaleInX 0.3s ease-out forwards;
-    transform-origin: left;
+
+/* ===== Logout Animation ===== */
+
+@keyframes ripple-expand {
+    0% {
+        width: 0;
+        height: 0;
+        opacity: 0.8;
+    }
+
+    100% {
+        width: 300vmax;
+        height: 300vmax;
+        opacity: 1;
+    }
+}
+
+@keyframes fade-out-up {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+}
+
+.animate-ripple-expand {
+    animation: ripple-expand 0.8s ease-in forwards;
+}
+
+.animate-fade-in-delayed {
+    animation: fadeInUp 0.5s ease-out forwards;
+}
+
+/* 退出登录时的元素过渡类 */
+.logging-out-element {
+    transition: all 0.5s ease-out;
+}
+
+.logging-out .logging-out-element {
+    animation: fade-out-up 0.5s ease-in forwards;
+}
+
+/* 用户下拉菜单样式 */
+.user-dropdown .ant-dropdown-menu {
+    background: rgba(255, 255, 255, 0.8) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    padding: 8px;
+}
+
+.user-dropdown .ant-dropdown-menu-item {
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-weight: 500;
+}
+
+.user-dropdown .ant-dropdown-menu-item-divider {
+    background-color: rgba(0, 0, 0, 0.06);
+    margin: 4px 0;
 }

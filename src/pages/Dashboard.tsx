@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Input, Button, Spin, Empty, Modal, message, Tooltip, Dropdown, Avatar } from 'antd';
 import { LoadingOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
@@ -28,7 +28,9 @@ import { getAgentList, publishAgent } from '@/api/agent';
 import { logout } from '@/api/user';
 import { AiAgent } from '@/types';
 import '../styles/dashboard.css';
+import LogoutTransition from '@/components/transitions/LogoutTransition';
 
+// ... (keep utility functions) ...
 // Utility for consistent avatar colors
 const getAvatarColor = (name: string) => {
     const gradients = [
@@ -77,6 +79,12 @@ const Dashboard: React.FC = () => {
     const [searchText, setSearchText] = useState('');
     const [activeTab, setActiveTab] = useState<'agents' | 'knowledge'>('agents');
 
+    // 退出登录动画状态
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
+    const [logoutPosition, setLogoutPosition] = useState({ x: 0, y: 0 });
+    const userAvatarRef = useRef<HTMLDivElement>(null);
+
+    // ... (keep useEffect and loadAgents) ...
     // Mock Knowledge Base Data
     const knowledgeStats = {
         total: 12,
@@ -135,6 +143,15 @@ const Dashboard: React.FC = () => {
     };
 
     const handleLogout = async () => {
+        // 获取头像位置作为动画起点
+        if (userAvatarRef.current) {
+            const rect = userAvatarRef.current.getBoundingClientRect();
+            setLogoutPosition({
+                x: rect.left + rect.width / 2,
+                y: rect.top + rect.height / 2
+            });
+        }
+
         Modal.confirm({
             title: '确认退出',
             icon: <LogoutOutlined className="text-orange-500" />,
@@ -143,17 +160,28 @@ const Dashboard: React.FC = () => {
             okButtonProps: { danger: true },
             onOk: async () => {
                 try {
-                    await logout();
+                    // 1. 触发动画
+                    setIsLoggingOut(true);
+
+                    // 2. 调用API（并行）
+                    const logoutPromise = logout();
+
+                    // 3. 等待动画和API
+                    await Promise.all([
+                        logoutPromise,
+                        new Promise(resolve => setTimeout(resolve, 800)) // 至少展示800ms动画
+                    ]);
+
                     message.success('已退出登录');
-                    // 清除本地存储的token
                     localStorage.removeItem('token');
-                    // 跳转到登录页
                     navigate('/login');
                 } catch (error) {
                     console.error('退出登录失败', error);
-                    // 即使API调用失败，也清除本地token并跳转
-                    localStorage.removeItem('token');
-                    navigate('/login');
+                    // 失败也强制退出
+                    setTimeout(() => {
+                        localStorage.removeItem('token');
+                        navigate('/login');
+                    }, 800);
                 }
             }
         });
@@ -252,7 +280,10 @@ const Dashboard: React.FC = () => {
                             trigger={['click']}
                             overlayClassName="user-dropdown"
                         >
-                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md cursor-pointer hover:scale-105 transition-transform hover:shadow-lg">
+                            <div
+                                ref={userAvatarRef}
+                                className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-md cursor-pointer hover:scale-105 transition-transform hover:shadow-lg"
+                            >
                                 <UserOutlined />
                             </div>
                         </Dropdown>
@@ -260,8 +291,11 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
 
+            {/* Logout Transition Overlay */}
+            <LogoutTransition visible={isLoggingOut} position={logoutPosition} />
+
             {/* Scrollable Content Area */}
-            <div className="flex-1 overflow-y-auto">
+            <div className={`flex-1 overflow-y-auto ${isLoggingOut ? 'logging-out' : ''}`}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
                     {/* Welcome Banner */}
                     <div className="welcome-banner rounded-3xl p-8 mb-8 text-white shadow-2xl animate-fade-in-up">
