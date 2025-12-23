@@ -165,6 +165,54 @@ const AgentChat: React.FC = () => {
     };
 
 
+    // Extracted stream processing logic
+    const processStream = async (reader: ReadableStreamDefaultReader<Uint8Array>) => {
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                if (!line.trim().startsWith('data:')) continue;
+                const dataStr = line.replace('data:', '').trim();
+                if (dataStr === '[DONE]') continue;
+
+                try {
+                    const data = JSON.parse(dataStr);
+                    handleSSEEvent(data); // Re-use the existing event handler
+
+                    // Check for pause event specifically to update state
+                    if (data.type === 'node_lifecycle' && data.status === 'paused') {
+                        const checkMessage = data.result?.replace('WAITING_FOR_HUMAN:', '') || '请审核此内容';
+                        setInterventionState({
+                            isPaused: true,
+                            nodeId: data.nodeId,
+                            nodeName: data.nodeName,
+                            checkMessage: checkMessage,
+                            allowModifyOutput: true
+                        });
+                        setLoading(false);
+                        // Don't return here, let the loop continue or break as needed by reader
+                        // But for pause we might want to keep the connection open? 
+                        // Actually backend likely keeps it open or closes it. 
+                        // If we break, we stop reading.
+                        // But usually pause means we wait for user.
+                        // If backend closes stream on pause, we break naturally.
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('SSE Parse Error', e);
+                }
+            }
+        }
+    };
+
     const handleSend = async (userInput?: string, isResume: boolean = false) => {
         const messageToSend = isResume ? '' : (userInput || input);
 
@@ -228,132 +276,7 @@ const AgentChat: React.FC = () => {
             }
 
             const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop() || '';
-
-                for (const line of lines) {
-                    if (!line.trim().startsWith('data:')) continue;
-                    const dataStr = line.replace('data:', '').trim();
-                    if (dataStr === '[DONE]') continue;
-
-                    try {
-                        const data = JSON.parse(dataStr);
-
-                        if (data.type === 'node_lifecycle' && data.status === 'paused') {
-                            // 设置暂停状态
-                            const checkMessage = data.result?.replace('WAITING_FOR_HUMAN:', '') || '请审核此内容';
-                            setInterventionState({
-                                isPaused: true,
-                                nodeId: data.nodeId,
-                                nodeName: data.nodeName,
-                                checkMessage: checkMessage,
-                                allowModifyOutput: true // Assuming default true for now, needs backend support to pass this
-                            });
-
-                            // 更新节点状态为 paused
-                            setMessages(prev => {
-                                const newMessages = [...prev];
-                                const lastMsg = newMessages[newMessages.length - 1];
-                                if (lastMsg && lastMsg.role === 'assistant') {
-                                    // Update active node to paused
-                                    const nodeIndex = lastMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
-                                    if (nodeIndex !== -1) {
-                                        lastMsg.nodes[nodeIndex].status = 'paused';
-                                        lastMsg.nodes[nodeIndex].result = checkMessage;
-                                    } else {
-                                        // If node not found (shouldn't happen with correct events), add it
-                                        lastMsg.nodes.push({
-                                            nodeId: data.nodeId,
-                                            nodeName: data.nodeName,
-                                            status: 'paused',
-                                            content: '',
-                                            startTime: Date.now(),
-                                            result: checkMessage
-                                        });
-                                    }
-                                }
-                                return newMessages;
-                            });
-                            setLoading(false); // Stop loading indicator when paused
-                            return; // Stop processing stream temporarily
-                        }
-
-                        if (data.type === 'node_lifecycle') {
-                            // ... existing logic ...
-                            setActiveNodeId(data.nodeId);
-                            setMessages(prev => {
-                                const newMessages = [...prev];
-                                const lastMsg = newMessages[newMessages.length - 1];
-                                if (lastMsg && lastMsg.role === 'assistant') {
-                                    // Find existing node or add new
-                                    const nodeIndex = lastMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
-
-                                    if (nodeIndex !== -1) {
-                                        // Update existing
-                                        lastMsg.nodes[nodeIndex].status = data.status;
-                                        if (data.status === 'running') {
-                                            lastMsg.nodes[nodeIndex].startTime = Date.now();
-                                        } else if (data.status === 'completed') {
-                                            lastMsg.nodes[nodeIndex].duration = Date.now() - lastMsg.nodes[nodeIndex].startTime;
-                                            lastMsg.nodes[nodeIndex].result = data.result;
-                                        } else if (data.status === 'error') {
-                                            lastMsg.nodes[nodeIndex].result = data.result;
-                                        }
-                                    } else {
-                                        // Add new node
-                                        lastMsg.nodes.push({
-                                            nodeId: data.nodeId,
-                                            nodeName: data.nodeName,
-                                            status: data.status,
-                                            content: '',
-                                            startTime: Date.now(),
-                                            result: data.result
-                                        });
-                                    }
-                                }
-                                return newMessages;
-                            });
-                        } else if (data.type === 'node_execute') {
-                            // ... existing logic ...
-                            setMessages(prev => {
-                                const newMessages = [...prev];
-                                const lastMsg = newMessages[newMessages.length - 1];
-                                if (lastMsg && lastMsg.role === 'assistant') {
-                                    const nodeIndex = lastMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
-                                    if (nodeIndex !== -1) {
-                                        lastMsg.nodes[nodeIndex].content += data.content;
-                                    }
-                                    // Also accumulate to main content if it's the final answer
-                                    // For now just append to main content for visibility if needed
-                                    if (data.nodeName === 'End' || data.nodeName === 'Answer') { // Simple heuristic
-                                        lastMsg.content += data.content;
-                                    }
-                                }
-                                return newMessages;
-                            });
-                        } else if (data.type === 'answer') {
-                            setMessages(prev => {
-                                const newMessages = [...prev];
-                                const lastMsg = newMessages[newMessages.length - 1];
-                                if (lastMsg) {
-                                    lastMsg.content += data.content;
-                                }
-                                return newMessages;
-                            });
-                        }
-                    } catch (e) {
-                        console.warn('SSE Parse Error', e);
-                    }
-                }
-            }
+            await processStream(reader);
 
         } catch (error: any) {
             if (error.name !== 'AbortError') {
@@ -365,7 +288,6 @@ const AgentChat: React.FC = () => {
                     if (lastMsg) {
                         lastMsg.loading = false;
                         lastMsg.error = true;
-                        // Fallback error display
                         if (lastMsg.nodes.length === 0) {
                             lastMsg.content = `[请求失败: ${error.message}]`;
                         }
@@ -374,11 +296,52 @@ const AgentChat: React.FC = () => {
                 });
             }
         } finally {
-            if (!interventionState?.isPaused) { // Only stop loading if NOT paused
+            if (!interventionState?.isPaused) {
                 setLoading(false);
             }
             abortControllerRef.current = null;
             setActiveNodeId(null);
+        }
+    };
+
+    const handleReviewSubmit = async (data: { approved: boolean; comments?: string; modifiedOutput?: string }) => {
+        setLoading(true); // Set loading state
+
+        try {
+            const token = localStorage.getItem('token');
+            const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:8080';
+
+            const response = await fetch(`${API_BASE_URL}/client/agent/review`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({
+                    conversationId: conversationIdRef.current,
+                    nodeId: interventionState?.nodeId,
+                    approved: data.approved,
+                    comments: data.comments,
+                    modifiedOutput: data.modifiedOutput
+                })
+            });
+
+            if (!response.ok || !response.body) {
+                throw new Error(response.statusText);
+            }
+
+            // Clear pause state on success (or before processing stream)
+            setInterventionState(null);
+
+            // Process the stream to update chat with resumed execution
+            const reader = response.body.getReader();
+            await processStream(reader);
+
+        } catch (error) {
+            console.error('Review execution failed', error);
+            message.error('恢复执行失败');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -649,15 +612,8 @@ const AgentChat: React.FC = () => {
                                                 nodeName={interventionState.nodeName!}
                                                 checkMessage={interventionState.checkMessage!}
                                                 allowModifyOutput={interventionState.allowModifyOutput}
-                                                onReviewComplete={(approved) => {
-                                                    setInterventionState(null);
-                                                    if (approved) {
-                                                        // 审核通过后重新发起请求继续执行
-                                                        handleSend(undefined, true);
-                                                    } else {
-                                                        setLoading(false); // Stop loading if rejected
-                                                    }
-                                                }}
+                                                currentOutput={interventionState.checkMessage} // Using checkMessage as a proxy for output if needed, or update if we have it
+                                                onReview={handleReviewSubmit}
                                             />
                                         </div>
                                     )}

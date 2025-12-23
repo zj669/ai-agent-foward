@@ -124,29 +124,33 @@ const ModelConfig: React.FC<ModelConfigProps> = ({ configDef, fieldDefs }) => {
                 </div>
             )}
 
-            <Divider dashed style={{ margin: '12px 0' }} />
-            <div className="px-1">
-                <div className="text-xs font-bold text-gray-500 mb-3">参数配置</div>
-                {commonFields.map(field => (
-                    <Form.Item
-                        key={field.fieldName}
-                        name={['MODEL', field.fieldName]}
-                        label={
-                            <span>
-                                {field.fieldLabel}
-                                {field.description && (
-                                    <Tooltip title={field.description}>
-                                        <InfoCircleOutlined className="ml-1 text-gray-400" />
-                                    </Tooltip>
-                                )}
-                            </span>
-                        }
-                        valuePropName={field.fieldType === 'boolean' || field.fieldType === 'checkbox' ? 'checked' : 'value'}
-                    >
-                        {renderField(field)}
-                    </Form.Item>
-                ))}
-            </div>
+            {commonFields.length > 0 && (
+                <>
+                    <Divider dashed style={{ margin: '12px 0' }} />
+                    <div className="px-1">
+                        <div className="text-xs font-bold text-gray-500 mb-3">参数配置</div>
+                        {commonFields.map(field => (
+                            <Form.Item
+                                key={field.fieldName}
+                                name={['MODEL', field.fieldName]}
+                                label={
+                                    <span>
+                                        {field.fieldLabel}
+                                        {field.description && (
+                                            <Tooltip title={field.description}>
+                                                <InfoCircleOutlined className="ml-1 text-gray-400" />
+                                            </Tooltip>
+                                        )}
+                                    </span>
+                                }
+                                valuePropName={field.fieldType === 'boolean' || field.fieldType === 'checkbox' ? 'checked' : 'value'}
+                            >
+                                {renderField(field)}
+                            </Form.Item>
+                        ))}
+                    </div>
+                </>
+            )}
         </div>
     );
 };
@@ -250,7 +254,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
             setFieldDefsMap(fieldsMap);
 
             // Set form values
-            // Use data.config which is already structured by graphConverter.ts as { MODEL: {...}, USER_PROMPT: {...} }
+            // Use data.config which is already structured by graphConverter.ts as {MODEL: {...}, USER_PROMPT: {...} }
             const currentConfig = (selectedNode.data?.config as any) || {};
 
             // Reset fields before setting new values to ensure independence

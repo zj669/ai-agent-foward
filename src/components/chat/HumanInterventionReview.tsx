@@ -13,7 +13,7 @@ interface HumanInterventionReviewProps {
     checkMessage: string;
     allowModifyOutput?: boolean;
     currentOutput?: string;
-    onReviewComplete: (approved: boolean) => void;
+    onReview: (data: { approved: boolean; comments?: string; modifiedOutput?: string }) => Promise<void>;
 }
 
 const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
@@ -23,7 +23,7 @@ const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
     checkMessage,
     allowModifyOutput = false,
     currentOutput = '',
-    onReviewComplete
+    onReview
 }) => {
     const [loading, setLoading] = useState(false);
     const [comments, setComments] = useState('');
@@ -33,20 +33,17 @@ const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
     const handleReview = async (approved: boolean) => {
         setLoading(true);
         try {
-            await submitReview({
-                conversationId,
-                nodeId,
+            await onReview({
                 approved,
                 comments: comments || undefined,
                 modifiedOutput: showModify && modifiedOutput !== currentOutput
                     ? modifiedOutput
                     : undefined
             });
-
-            message.success(approved ? '已批准，继续执行' : '已拒绝');
-            onReviewComplete(approved);
+            message.success(approved ? '已批准，正在恢复执行...' : '已拒绝');
         } catch (error) {
-            message.error('审核提交失败');
+            // Error is handled by parent usually, but we catch here to stop loading
+            // message.error('审核提交失败');
             console.error('Review failed:', error);
         } finally {
             setLoading(false);

@@ -99,83 +99,42 @@ export function convertToGraphJsonSchema(
 /**
  * 转换节点配置
  * 将前端的配置格式转换为后端期望的格式
+ * 
+ * 数据驱动：直接根据前端表单的配置类型动态组装，无需硬编码字段
+ * 前端格式: { CONFIG_TYPE: { field1, field2, ... }, ... }
+ * 后端格式: { configType: { field1, field2, ... }, ... }
  */
 function convertNodeConfig(config: Record<string, any>): Record<string, any> {
     const converted: Record<string, any> = {};
+    if (!config) return converted;
 
-    // MODEL 配置 - 新的嵌套对象格式
-    if (config.MODEL) {
-        converted.model = {
-            modelId: config.MODEL.modelId !== undefined ? config.MODEL.modelId : null,
-            baseUrl: config.MODEL.baseUrl || null,
-            apiKey: config.MODEL.apiKey || null,
-            modelName: config.MODEL.modelName || null,
-            temperature: config.MODEL.temperature,
-            maxTokens: config.MODEL.maxTokens
-        };
-    }
+    // 将 UPPER_SNAKE_CASE 转换为 camelCase
+    const toBackendKey = (configType: string): string => {
+        return configType
+            .toLowerCase()
+            .replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    };
 
-    // USER_PROMPT 配置
-    if (config.USER_PROMPT) {
-        if (config.USER_PROMPT.systemPrompt) {
-            converted.systemPrompt = config.USER_PROMPT.systemPrompt;
-        }
-        if (config.USER_PROMPT.userPromptTemplate) {
-            converted.userPromptTemplate = config.USER_PROMPT.userPromptTemplate;
-        }
-        // New field: userPrompt
-        if (config.USER_PROMPT.userPrompt) {
-            converted.userPrompt = config.USER_PROMPT.userPrompt;
-        }
-    }
+    // 遍历所有配置类型，动态转换
+    Object.keys(config).forEach(configType => {
+        const value = config[configType];
+        if (value === null || value === undefined) return;
 
-    // MCP_TOOL 配置
-    if (config.MCP_TOOL) {
-        converted.mcpTool = config.MCP_TOOL;
-    }
+        const backendKey = toBackendKey(configType);
 
-    // TIMEOUT 配置
-    if (config.TIMEOUT) {
-        converted.timeout = config.TIMEOUT.timeout;
-    }
-
-    // ADVISOR 配置
-    if (config.ADVISOR) {
-        converted.advisor = config.ADVISOR;
-    }
-
-    // SYSTEM_PROMPT 配置
-    if (config.SYSTEM_PROMPT) {
-        converted.systemPrompt = config.SYSTEM_PROMPT;
-    }
-
-    // NEXT_NODES 配置（用于 RouterNode）
-    if (config.NEXT_NODES && Array.isArray(config.NEXT_NODES)) {
-        converted.nextNodes = config.NEXT_NODES;
-    }
-
-    // HUMAN_INTERVENTION 配置（通用）
-    if (config.HUMAN_INTERVENTION) {
-        converted.humanIntervention = {
-            enabled: config.HUMAN_INTERVENTION.enabled || false,
-            timing: config.HUMAN_INTERVENTION.timing || 'AFTER',
-            checkMessage: config.HUMAN_INTERVENTION.checkMessage,
-            allowModifyOutput: config.HUMAN_INTERVENTION.allowModifyOutput || false,
-            timeout: config.HUMAN_INTERVENTION.timeout
-        };
-    }
-
-    // 保留其他可能直接设置的属性
-    // Exclude processed keys
-    const processedKeys = ['MODEL', 'USER_PROMPT', 'MCP_TOOL', 'TIMEOUT', 'ADVISOR', 'SYSTEM_PROMPT', 'NEXT_NODES', 'HUMAN_INTERVENTION'];
-    Object.keys(config).forEach(key => {
-        if (!processedKeys.includes(key)) {
-            converted[key] = config[key];
+        // 直接复制整个配置对象（包含所有字段）
+        if (typeof value === 'object' && !Array.isArray(value)) {
+            // 对象类型：复制所有内部字段
+            converted[backendKey] = { ...value };
+        } else {
+            // 基本类型或数组：直接赋值
+            converted[backendKey] = value;
         }
     });
 
     return converted;
 }
+
 
 /**
  * 将后端 GraphJsonSchema 转换为 React Flow 格式 (用于编辑器加载)
@@ -227,95 +186,38 @@ export function convertFromGraphJsonSchema(schema: GraphJsonSchema): {
 
 /**
  * 反向转换节点配置 (从后端格式转为前端格式)
+ * 
+ * 数据驱动：直接根据后端返回的配置字段动态组装，无需硬编码字段
+ * 后端格式: { configType: { field1, field2, ... }, ... }
+ * 前端格式: { CONFIG_TYPE: { field1, field2, ... }, ... }
  */
 function reverseConvertNodeConfig(config: Record<string, any>): Record<string, any> {
     const converted: Record<string, any> = {};
     if (!config) return converted;
 
-    // 处理 MODEL 配置 - 读取嵌套的 model 对象
-    if (config.model && typeof config.model === 'object') {
-        converted.MODEL = {
-            modelId: config.model.modelId !== undefined && config.model.modelId !== null ? config.model.modelId : null,
-            baseUrl: config.model.baseUrl || null,
-            apiKey: config.model.apiKey || null,
-            modelName: config.model.modelName || null,
-            temperature: config.model.temperature,
-            maxTokens: config.model.maxTokens
-        };
-    } else if (config.model || config.temperature !== undefined || config.maxTokens !== undefined) {
-        // 兼容旧格式：扁平化的配置
-        let modelName = null;
-        if (typeof config.model === 'string') {
-            modelName = config.model;
-        } else if (typeof config.model === 'object' && config.model !== null) {
-            // 极端情况：model 是对象但不在标准嵌套位置
-            modelName = config.model.id || config.model.name || config.model.modelName;
-        }
+    // 将 camelCase 转换为 UPPER_SNAKE_CASE
+    const toFrontendKey = (backendKey: string): string => {
+        return backendKey
+            .replace(/([A-Z])/g, '_$1')
+            .toUpperCase();
+    };
 
-        converted.MODEL = {
-            modelId: null,
-            modelName: modelName,
-            temperature: config.temperature,
-            maxTokens: config.maxTokens,
-            apiKey: config.apiKey,
-            baseUrl: null
-        };
-    }
+    // 遍历后端返回的所有配置，动态转换
+    Object.keys(config).forEach(backendKey => {
+        const value = config[backendKey];
+        if (value === null || value === undefined) return;
 
-    // 提取 USER_PROMPT 相关字段
-    if (config.userPrompt || config.userPromptTemplate) {
-        converted.USER_PROMPT = {
-            userPrompt: config.userPrompt,
-            userPromptTemplate: config.userPromptTemplate
-        };
-    }
+        const frontendKey = toFrontendKey(backendKey);
 
-    // Warning: SystemPrompt priority
-    // If systemPrompt is object with promptId, map to SYSTEM_PROMPT
-    if (config.systemPrompt) {
-        if (typeof config.systemPrompt === 'object' && config.systemPrompt.promptId) {
-            converted.SYSTEM_PROMPT = config.systemPrompt;
+        // 直接复制整个配置对象（包含所有字段）
+        if (typeof value === 'object' && !Array.isArray(value)) {
+            // 对象类型：复制所有内部字段
+            converted[frontendKey] = { ...value };
         } else {
-            // Fallback: put into USER_PROMPT for compatibility
-            converted.USER_PROMPT = {
-                ...(converted.USER_PROMPT || {}),
-                systemPrompt: config.systemPrompt
-            };
+            // 基本类型或数组：直接赋值
+            converted[frontendKey] = value;
         }
-    }
-
-    // 提取 MCP_TOOL
-    if (config.mcpTool) {
-        converted.MCP_TOOL = config.mcpTool;
-    }
-
-    // 提取 TIMEOUT
-    if (config.timeout !== undefined) {
-        converted.TIMEOUT = {
-            timeout: config.timeout
-        };
-    }
-
-    // 提取 ADVISOR
-    if (config.advisor) {
-        converted.ADVISOR = config.advisor;
-    }
-
-    // 提取 NEXT_NODES（用于 RouterNode）
-    if (config.nextNodes && Array.isArray(config.nextNodes)) {
-        converted.NEXT_NODES = config.nextNodes;
-    }
-
-    // 提取 HUMAN_INTERVENTION
-    if (config.humanIntervention) {
-        converted.HUMAN_INTERVENTION = {
-            enabled: config.humanIntervention.enabled,
-            timing: config.humanIntervention.timing,
-            checkMessage: config.humanIntervention.checkMessage,
-            allowModifyOutput: config.humanIntervention.allowModifyOutput,
-            timeout: config.humanIntervention.timeout
-        };
-    }
+    });
 
     return converted;
 }
