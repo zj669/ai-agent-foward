@@ -178,8 +178,9 @@ interface ConfigPanelProps {
 }
 
 const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown }) => {
-    const { nodes, selectedNodeId, updateNodeData, deleteNode } = useAgentStore();
+    const { nodes, edges, selectedNodeId, selectedEdgeId, updateNodeData, updateEdgeData, deleteNode, deleteEdge } = useAgentStore();
     const selectedNode = nodes.find(n => n.id === selectedNodeId);
+    const selectedEdge = edges.find(e => e.id === selectedEdgeId);
 
     const [loading, setLoading] = useState(false);
     const [fieldDefsMap, setFieldDefsMap] = useState<Record<string, FieldDef[]>>({});
@@ -271,6 +272,87 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
         }
     };
 
+    // Render Edge Config
+    if (selectedEdge) {
+        return (
+            <div className="h-full flex flex-col bg-white shadow-xl rounded-lg overflow-hidden border border-gray-200">
+                <div
+                    className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 cursor-move"
+                    onMouseDown={onHeaderMouseDown}
+                >
+                    <div className="flex items-center gap-2">
+                        {onClose && (
+                            <Button
+                                type="text"
+                                icon={<span className="text-gray-400">⇤</span>}
+                                onClick={onClose}
+                                className="mr-1"
+                                size="small"
+                            />
+                        )}
+                        <div>
+                            <div className="font-bold text-gray-800">连接线配置</div>
+                            <div className="text-xs text-gray-400 font-mono mt-1">{selectedEdge.id}</div>
+                        </div>
+                    </div>
+                    <div className="tag px-2 py-0.5 bg-purple-100 text-purple-600 rounded text-xs font-semibold">
+                        EDGE
+                    </div>
+                </div>
+
+                <div className="p-4 flex-1">
+                    <Form layout="vertical">
+                        <Form.Item label="连接类型">
+                            <Select
+                                value={selectedEdge.data?.edgeType || 'DEPENDENCY'}
+                                onChange={(val) => updateEdgeData(selectedEdge.id, { edgeType: val })}
+                            >
+                                <Select.Option value="DEPENDENCY">标准依赖 (Dependency)</Select.Option>
+                                <Select.Option value="LOOP_BACK">循环回溯 (Loop Back)</Select.Option>
+                                <Select.Option value="CONDITIONAL">条件分支 (Conditional)</Select.Option>
+                            </Select>
+                        </Form.Item>
+
+                        <div className="bg-gray-50 p-3 rounded text-xs text-gray-500">
+                            {selectedEdge.data?.edgeType === 'LOOP_BACK' ? (
+                                <p>循环边允许流程回溯到之前的节点。请注意，循环次数受最大迭代限制 (Max Loop Iterations) 控制，防止死循环。</p>
+                            ) : selectedEdge.data?.edgeType === 'CONDITIONAL' ? (
+                                <p>条件边通常由路由节点控制，根据执行结果动态选择路径。</p>
+                            ) : (
+                                <p>标准依赖边表示正常的流程执行顺序。</p>
+                            )}
+                        </div>
+                    </Form>
+                </div>
+
+                {/* Footer Actions for Edge */}
+                <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+                    <Button
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => {
+                            Modal.confirm({
+                                title: '确认删除',
+                                content: '确定要删除该连接线吗？',
+                                okText: '删除',
+                                okType: 'danger',
+                                cancelText: '取消',
+                                onOk: () => {
+                                    if (selectedEdgeId) {
+                                        deleteEdge(selectedEdgeId);
+                                        if (onClose) onClose();
+                                    }
+                                }
+                            });
+                        }}
+                    >
+                        删除连接
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
     if (!selectedNode) {
         return (
             <div className="h-full flex flex-col bg-white shadow-xl rounded-lg overflow-hidden border border-gray-200">
@@ -289,8 +371,8 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
                 </div>
                 <div className="flex-1 flex items-center justify-center text-gray-400 bg-gray-50">
                     <div className="text-center">
-                        <div className="mb-2">请选择一个节点</div>
-                        <div className="text-xs text-gray-300">点击画布上的节点进行配置</div>
+                        <div className="mb-2">请选择一个节点或连接线</div>
+                        <div className="text-xs text-gray-300">点击画布上的元素进行配置</div>
                     </div>
                 </div>
             </div>

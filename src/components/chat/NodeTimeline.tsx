@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CaretRightOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, BulbOutlined, PlayCircleOutlined, ToolOutlined } from '@ant-design/icons';
+import { CaretRightOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, BulbOutlined, PlayCircleOutlined, ToolOutlined, PauseCircleOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 // @ts-ignore
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -20,7 +20,7 @@ const getNodeIcon = (nodeName: string) => {
 };
 
 const NodeTimeline: React.FC<NodeTimelineProps> = ({ node, isLast }) => {
-    const defaultExpanded = node.status === 'running' || node.status === 'error';
+    const defaultExpanded = node.status === 'running' || node.status === 'error' || node.status === 'paused';
     const [expanded, setExpanded] = useState(defaultExpanded);
 
     const toggleExpand = () => setExpanded(!expanded);
@@ -65,11 +65,12 @@ const NodeTimeline: React.FC<NodeTimelineProps> = ({ node, isLast }) => {
                 {/* Status Dot */}
                 <div className={`node-status-dot flex items-center justify-center ${node.status}`}>
                     {node.status === 'running' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                    {node.status === 'paused' && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                 </div>
 
                 {/* Node Info */}
                 <div className="flex-1 flex items-center gap-2">
-                    <span className={`text-sm font-medium ${node.status === 'running' ? 'text-blue-600' : 'text-gray-700'}`}>
+                    <span className={`text-sm font-medium ${node.status === 'running' ? 'text-blue-600' : node.status === 'paused' ? 'text-amber-500' : 'text-gray-700'}`}>
                         {node.nodeName}
                     </span>
                     {node.status === 'running' && (
@@ -85,6 +86,11 @@ const NodeTimeline: React.FC<NodeTimelineProps> = ({ node, isLast }) => {
                     {node.status === 'error' && (
                         <span className="text-xs text-red-500 flex items-center gap-1">
                             <CloseCircleOutlined /> 失败
+                        </span>
+                    )}
+                    {node.status === 'paused' && (
+                        <span className="text-xs text-amber-500 flex items-center gap-1">
+                            <PauseCircleOutlined /> 等待审核
                         </span>
                     )}
                 </div>

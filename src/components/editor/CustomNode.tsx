@@ -60,7 +60,7 @@ const CustomNode: React.FC<NodeProps> = ({ data, selected }) => {
     return (
         <div
             className={`
-                relative min-w-[160px] max-w-[240px] rounded-xl border-2 transition-all duration-300 animate-pop-in
+                relative min-w-[160px] max-w-[240px] rounded-xl border-2 transition-all duration-300
                 ${selected ? `border-blue-500 shadow-xl ${style.glow}` : `${style.border} shadow-md hover:shadow-lg`}
                 bg-white group
             `}
@@ -81,6 +81,13 @@ const CustomNode: React.FC<NodeProps> = ({ data, selected }) => {
                 {status === 'running' && <LoadingOutlined className="text-blue-500 animate-spin text-xs" />}
                 {status === 'success' && <CheckCircleOutlined className="text-emerald-500 text-xs" />}
                 {status === 'error' && <BugOutlined className="text-red-500 text-xs" />}
+
+                {/* Human Intervention Indicator */}
+                {data.config?.HUMAN_INTERVENTION?.enabled && (
+                    <div className="ml-1 text-[10px] bg-orange-100 text-orange-600 px-1 rounded border border-orange-200" title="人工介入已启用">
+                        暂停
+                    </div>
+                )}
             </div>
 
             {/* Body */}

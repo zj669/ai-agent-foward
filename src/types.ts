@@ -6,6 +6,12 @@ export enum AgentStepType {
   SYSTEM = 'SYSTEM'
 }
 
+export enum EdgeType {
+  DEPENDENCY = 'DEPENDENCY',
+  LOOP_BACK = 'LOOP_BACK',
+  CONDITIONAL = 'CONDITIONAL'
+}
+
 export interface StreamData {
   sessionId: string;
   content: string;

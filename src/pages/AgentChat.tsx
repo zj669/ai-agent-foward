@@ -7,11 +7,12 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 // @ts-ignore
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { getAgentDetail, getAgentList, getNewConversationId, getConversationIds, getChatHistory } from '../api/agent';
+import { getNewConversationId, getChatHistory, getAgentDetail, getConversationIds } from '../api/agent';
 import '../styles/chat.css'; // Import custom styles
 import MessageBubble from '../components/chat/MessageBubble';
 import EmptyState from '../components/chat/EmptyState';
-import { ChatMessage, NodeExecution } from '../components/chat/types';
+import HumanInterventionReview from '../components/chat/HumanInterventionReview';
+import { ChatMessage, NodeExecution, HumanInterventionState } from '../components/chat/types';
 import dayjs from 'dayjs';
 
 const { Sider, Content } = Layout;
@@ -41,6 +42,7 @@ const AgentChat: React.FC = () => {
     const [conversationId, setConversationId] = useState<string>('');
     const [conversations, setConversations] = useState<ConversationItem[]>([]);
     const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+    const [interventionState, setInterventionState] = useState<HumanInterventionState | null>(null);
 
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -163,52 +165,67 @@ const AgentChat: React.FC = () => {
     };
 
 
-    const handleSend = async () => {
-        if (loading) return;
-        if (!input.trim() || !id) return;
+    const handleSend = async (userInput?: string, isResume: boolean = false) => {
+        const messageToSend = isResume ? '' : (userInput || input);
 
-        const userMessage = input;
-        setInput('');
+        if (!isResume && !messageToSend.trim()) return;
 
-        // Add User Message
-        setMessages(prev => [...prev, { role: 'user', content: userMessage, nodes: [], timestamp: Date.now() }]);
+        if (!isResume) {
+            // Add user message
+            const newUserMsg: ChatMessage = {
+                role: 'user',
+                content: messageToSend,
+                nodes: [],
+                timestamp: Date.now()
+            };
+            setMessages(prev => [...prev, newUserMsg]);
+            setInput('');
+        }
+
+        // Add assistant placeholder
+        const newAssistantMsg: ChatMessage = {
+            role: 'assistant',
+            content: '',
+            nodes: [],
+            timestamp: Date.now(),
+            loading: true
+        };
+        setMessages(prev => [...prev, newAssistantMsg]);
         setLoading(true);
 
-        // Add Assistant Placeholder
-        setMessages(prev => [...prev, { role: 'assistant', nodes: [], timestamp: Date.now(), loading: true }]);
-
         try {
-            // Ensure we have a conversation ID
-            if (!conversationIdRef.current) {
-                try {
-                    const newCid = await getNewConversationId();
-                    setConversationId(newCid);
-                    conversationIdRef.current = newCid;
-                } catch (e) {
-                    console.error('Failed to generate conversation ID', e);
-                    // allow fallback to undefined, let backend handle it or fail
-                }
+            const chatConversationId = isResume
+                ? conversationIdRef.current
+                : (conversationId || await getNewConversationId());
+
+            if (!conversationId) {
+                setConversationId(chatConversationId);
+                conversationIdRef.current = chatConversationId;
             }
 
-            abortControllerRef.current = new AbortController();
+            const token = localStorage.getItem('token');
+            const abortController = new AbortController();
+            abortControllerRef.current = abortController;
+
             const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:8080';
 
             const response = await fetch(`${API_BASE_URL}/client/agent/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': token ? `Bearer ${token}` : ''
                 },
                 body: JSON.stringify({
                     agentId: id,
-                    userMessage: userMessage,
-                    conversationId: conversationIdRef.current || undefined
+                    userMessage: messageToSend,
+                    conversationId: chatConversationId
                 }),
-                signal: abortControllerRef.current.signal
+                signal: abortController.signal
             });
 
-            if (!response.ok) throw new Error(response.statusText);
-            if (!response.body) throw new Error('No response body');
+            if (!response.ok || !response.body) {
+                throw new Error(response.statusText);
+            }
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -229,7 +246,109 @@ const AgentChat: React.FC = () => {
 
                     try {
                         const data = JSON.parse(dataStr);
-                        handleSSEEvent(data);
+
+                        if (data.type === 'node_lifecycle' && data.status === 'paused') {
+                            // 设置暂停状态
+                            const checkMessage = data.result?.replace('WAITING_FOR_HUMAN:', '') || '请审核此内容';
+                            setInterventionState({
+                                isPaused: true,
+                                nodeId: data.nodeId,
+                                nodeName: data.nodeName,
+                                checkMessage: checkMessage,
+                                allowModifyOutput: true // Assuming default true for now, needs backend support to pass this
+                            });
+
+                            // 更新节点状态为 paused
+                            setMessages(prev => {
+                                const newMessages = [...prev];
+                                const lastMsg = newMessages[newMessages.length - 1];
+                                if (lastMsg && lastMsg.role === 'assistant') {
+                                    // Update active node to paused
+                                    const nodeIndex = lastMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
+                                    if (nodeIndex !== -1) {
+                                        lastMsg.nodes[nodeIndex].status = 'paused';
+                                        lastMsg.nodes[nodeIndex].result = checkMessage;
+                                    } else {
+                                        // If node not found (shouldn't happen with correct events), add it
+                                        lastMsg.nodes.push({
+                                            nodeId: data.nodeId,
+                                            nodeName: data.nodeName,
+                                            status: 'paused',
+                                            content: '',
+                                            startTime: Date.now(),
+                                            result: checkMessage
+                                        });
+                                    }
+                                }
+                                return newMessages;
+                            });
+                            setLoading(false); // Stop loading indicator when paused
+                            return; // Stop processing stream temporarily
+                        }
+
+                        if (data.type === 'node_lifecycle') {
+                            // ... existing logic ...
+                            setActiveNodeId(data.nodeId);
+                            setMessages(prev => {
+                                const newMessages = [...prev];
+                                const lastMsg = newMessages[newMessages.length - 1];
+                                if (lastMsg && lastMsg.role === 'assistant') {
+                                    // Find existing node or add new
+                                    const nodeIndex = lastMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
+
+                                    if (nodeIndex !== -1) {
+                                        // Update existing
+                                        lastMsg.nodes[nodeIndex].status = data.status;
+                                        if (data.status === 'running') {
+                                            lastMsg.nodes[nodeIndex].startTime = Date.now();
+                                        } else if (data.status === 'completed') {
+                                            lastMsg.nodes[nodeIndex].duration = Date.now() - lastMsg.nodes[nodeIndex].startTime;
+                                            lastMsg.nodes[nodeIndex].result = data.result;
+                                        } else if (data.status === 'error') {
+                                            lastMsg.nodes[nodeIndex].result = data.result;
+                                        }
+                                    } else {
+                                        // Add new node
+                                        lastMsg.nodes.push({
+                                            nodeId: data.nodeId,
+                                            nodeName: data.nodeName,
+                                            status: data.status,
+                                            content: '',
+                                            startTime: Date.now(),
+                                            result: data.result
+                                        });
+                                    }
+                                }
+                                return newMessages;
+                            });
+                        } else if (data.type === 'node_execute') {
+                            // ... existing logic ...
+                            setMessages(prev => {
+                                const newMessages = [...prev];
+                                const lastMsg = newMessages[newMessages.length - 1];
+                                if (lastMsg && lastMsg.role === 'assistant') {
+                                    const nodeIndex = lastMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
+                                    if (nodeIndex !== -1) {
+                                        lastMsg.nodes[nodeIndex].content += data.content;
+                                    }
+                                    // Also accumulate to main content if it's the final answer
+                                    // For now just append to main content for visibility if needed
+                                    if (data.nodeName === 'End' || data.nodeName === 'Answer') { // Simple heuristic
+                                        lastMsg.content += data.content;
+                                    }
+                                }
+                                return newMessages;
+                            });
+                        } else if (data.type === 'answer') {
+                            setMessages(prev => {
+                                const newMessages = [...prev];
+                                const lastMsg = newMessages[newMessages.length - 1];
+                                if (lastMsg) {
+                                    lastMsg.content += data.content;
+                                }
+                                return newMessages;
+                            });
+                        }
                     } catch (e) {
                         console.warn('SSE Parse Error', e);
                     }
@@ -238,7 +357,7 @@ const AgentChat: React.FC = () => {
 
         } catch (error: any) {
             if (error.name !== 'AbortError') {
-                console.error(error);
+                console.error('Chat error', error);
                 message.error('发送消息失败');
                 setMessages(prev => {
                     const newMsgs = [...prev];
@@ -255,7 +374,9 @@ const AgentChat: React.FC = () => {
                 });
             }
         } finally {
-            setLoading(false);
+            if (!interventionState?.isPaused) { // Only stop loading if NOT paused
+                setLoading(false);
+            }
             abortControllerRef.current = null;
             setActiveNodeId(null);
         }
@@ -515,21 +636,40 @@ const AgentChat: React.FC = () => {
                             <EmptyState agentName={agentName} agentDesc={agentDesc} />
                         )}
 
-                        {messages.map((msg, index) => (
-                            <MessageBubble key={index} message={msg} />
-                        ))}
-
-                        {/* Loading Indicator for very start before any node */}
-                        {loading && messages.length > 0 && messages[messages.length - 1].role === 'assistant' && messages[messages.length - 1].nodes.length === 0 && (
-                            <div className="flex gap-4 animate-fadeIn">
-                                <Avatar icon={<RobotOutlined />} className="bg-gradient-to-br from-blue-500 to-indigo-600 flex-shrink-0 mt-1 shadow-lg" size="large" />
-                                <div className="bg-white border border-blue-100 rounded-2xl rounded-tl-sm p-4 shadow-sm flex items-center gap-3">
-                                    <Spin size="small" />
-                                    <span className="text-gray-500 text-sm animate-pulse">正在思考并规划任务...</span>
+                        <div className="message-list">
+                            {messages.map((msg, index) => (
+                                <div key={index}>
+                                    <MessageBubble message={msg} />
+                                    {/* Render Review Component if this is the last message relative to intervention */}
+                                    {index === messages.length - 1 && interventionState?.isPaused && (
+                                        <div style={{ maxWidth: '80%', marginTop: 8 }}>
+                                            <HumanInterventionReview
+                                                conversationId={conversationId}
+                                                nodeId={interventionState.nodeId!}
+                                                nodeName={interventionState.nodeName!}
+                                                checkMessage={interventionState.checkMessage!}
+                                                allowModifyOutput={interventionState.allowModifyOutput}
+                                                onReviewComplete={(approved) => {
+                                                    setInterventionState(null);
+                                                    if (approved) {
+                                                        // 审核通过后重新发起请求继续执行
+                                                        handleSend(undefined, true);
+                                                    } else {
+                                                        setLoading(false); // Stop loading if rejected
+                                                    }
+                                                }}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        )}
-                        <div ref={messagesEndRef} />
+                            ))}
+                            {loading && messages.length > 0 && !interventionState?.isPaused && (
+                                <div style={{ marginLeft: 16, marginTop: 8 }}>
+                                    <Spin size="small" /> Thinking...
+                                </div>
+                            )}
+                            <div ref={messagesEndRef} />
+                        </div>
                     </div>
                 </Content>
 
@@ -550,7 +690,7 @@ const AgentChat: React.FC = () => {
                             className="!pr-24 !py-3 !px-4 !bg-transparent !border-none !text-base resize-none !shadow-none focus:!ring-0 placeholder:text-gray-400"
                         />
                         <div className="absolute bottom-2.5 right-2.5 flex gap-2">
-                            {loading ? (
+                            {loading && !interventionState?.isPaused ? (
                                 <Tooltip title="停止生成">
                                     <Button
                                         type="default"
@@ -567,9 +707,10 @@ const AgentChat: React.FC = () => {
                                     shape="circle"
                                     size="large"
                                     icon={<SendOutlined />}
-                                    onClick={handleSend}
-                                    disabled={!input.trim()}
-                                    className={`gradient-btn shadow-lg shadow-blue-500/30 ${!input.trim() && 'opacity-50 grayscale'}`}
+                                    onClick={() => handleSend()}
+                                    loading={loading && !interventionState?.isPaused}
+                                    disabled={!input.trim() || (loading && !interventionState?.isPaused)}
+                                    className={`gradient-btn shadow-lg shadow-blue-500/30 ${(!input.trim() || (loading && !interventionState?.isPaused)) && 'opacity-50 grayscale'}`}
                                 />
                             )}
                         </div>

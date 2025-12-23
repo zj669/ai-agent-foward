@@ -31,6 +31,7 @@ export interface EdgeDefinition {
     target: string;
     label?: string;
     condition?: string;
+    edgeType?: string; // DEPENDENCY, LOOP_BACK, CONDITIONAL
 }
 
 /**
@@ -74,13 +75,14 @@ export function convertToGraphJsonSchema(
         config: convertNodeConfig(node.data?.config as Record<string, any> || {})
     }));
 
-    // 3. 转换边
+    // 3. 转换边 (保留 edgeType)
     const convertedEdges: EdgeDefinition[] = edges.map(edge => ({
         edgeId: edge.id,
         source: edge.source,
         target: edge.target,
         label: edge.label as string || undefined,
-        condition: undefined // 可根据需要设置，比如路由节点的输出条件
+        condition: undefined,
+        edgeType: (edge.data?.edgeType as string) || 'DEPENDENCY'
     }));
 
     // 4. 组装完整结构
@@ -147,9 +149,25 @@ function convertNodeConfig(config: Record<string, any>): Record<string, any> {
         converted.systemPrompt = config.SYSTEM_PROMPT;
     }
 
+    // NEXT_NODES 配置（用于 RouterNode）
+    if (config.NEXT_NODES && Array.isArray(config.NEXT_NODES)) {
+        converted.nextNodes = config.NEXT_NODES;
+    }
+
+    // HUMAN_INTERVENTION 配置（通用）
+    if (config.HUMAN_INTERVENTION) {
+        converted.humanIntervention = {
+            enabled: config.HUMAN_INTERVENTION.enabled || false,
+            timing: config.HUMAN_INTERVENTION.timing || 'AFTER',
+            checkMessage: config.HUMAN_INTERVENTION.checkMessage,
+            allowModifyOutput: config.HUMAN_INTERVENTION.allowModifyOutput || false,
+            timeout: config.HUMAN_INTERVENTION.timeout
+        };
+    }
+
     // 保留其他可能直接设置的属性
     // Exclude processed keys
-    const processedKeys = ['MODEL', 'USER_PROMPT', 'MCP_TOOL', 'TIMEOUT', 'ADVISOR', 'SYSTEM_PROMPT'];
+    const processedKeys = ['MODEL', 'USER_PROMPT', 'MCP_TOOL', 'TIMEOUT', 'ADVISOR', 'SYSTEM_PROMPT', 'NEXT_NODES', 'HUMAN_INTERVENTION'];
     Object.keys(config).forEach(key => {
         if (!processedKeys.includes(key)) {
             converted[key] = config[key];
@@ -192,12 +210,16 @@ export function convertFromGraphJsonSchema(schema: GraphJsonSchema): {
         }
     }));
 
-    // 2. 转换边
+    // 2. 转换边 (恢复 edgeType 到 data)
     const edges: Edge[] = (schema.edges || []).map(edge => ({
         id: edge.edgeId,
         source: edge.source,
         target: edge.target,
-        label: edge.label
+        label: edge.label,
+        type: 'custom', // Force custom edge type for visual rendering
+        data: {
+            edgeType: edge.edgeType || 'DEPENDENCY'
+        }
     }));
 
     return { nodes, edges };
@@ -277,6 +299,22 @@ function reverseConvertNodeConfig(config: Record<string, any>): Record<string, a
     // 提取 ADVISOR
     if (config.advisor) {
         converted.ADVISOR = config.advisor;
+    }
+
+    // 提取 NEXT_NODES（用于 RouterNode）
+    if (config.nextNodes && Array.isArray(config.nextNodes)) {
+        converted.NEXT_NODES = config.nextNodes;
+    }
+
+    // 提取 HUMAN_INTERVENTION
+    if (config.humanIntervention) {
+        converted.HUMAN_INTERVENTION = {
+            enabled: config.humanIntervention.enabled,
+            timing: config.humanIntervention.timing,
+            checkMessage: config.humanIntervention.checkMessage,
+            allowModifyOutput: config.humanIntervention.allowModifyOutput,
+            timeout: config.humanIntervention.timeout
+        };
     }
 
     return converted;

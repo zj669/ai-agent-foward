@@ -162,17 +162,22 @@ const AgentEditor: React.FC = () => {
 
                         return {
                             ...node,
-                            type: 'default', // Force visual type to default to match new nodes
+                            type: 'custom', // Use custom node type for visual rendering
                             data: {
                                 ...node.data,
-                                nodeType: businessType, // Ensure data.nodeType exists
-                                supportedConfigs: typeDef?.supportedConfigs || [], // Restore supportedConfigs
-                                // We could also restore icon/description if needed
+                                nodeType: businessType,
+                                supportedConfigs: typeDef?.supportedConfigs || [],
                             }
                         };
                     });
 
-                    setGraph(enrichedNodes || [], edges || []);
+                    // Enrich edges with type: 'custom' for proper rendering
+                    const enrichedEdges = (edges || []).map(edge => ({
+                        ...edge,
+                        type: 'custom',
+                    }));
+
+                    setGraph(enrichedNodes || [], enrichedEdges);
                     // Update global store nodeTypes if needed, though Sidebar checks it self
                     useAgentStore.getState().setNodeTypes(typesArray);
 

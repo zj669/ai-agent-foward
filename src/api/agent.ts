@@ -29,3 +29,45 @@ export const getNewConversationId = async (): Promise<string> => {
 export const getChatHistory = async (conversationId: string): Promise<any[]> => {
     return request.get(`/client/agent/chat/history/${conversationId}`);
 };
+
+// --- Human Intervention APIs ---
+
+/** 人工介入审核请求类型 */
+export interface ReviewRequest {
+    conversationId: string;
+    nodeId: string;
+    approved: boolean;
+    comments?: string;
+    modifiedOutput?: string;
+}
+
+/** 执行上下文响应类型 */
+export interface ExecutionContextResponse {
+    conversationId: string;
+    status: 'PENDING' | 'PAUSED' | 'COMPLETED';
+    pausedNodeId?: string;
+    pausedNodeName?: string;
+    pausedAt?: number;
+    nodeResults: Record<string, any>;
+    allowModifyOutput?: boolean;
+    checkMessage?: string;
+    interventionRequest?: any; // Include interventionRequest object
+}
+
+/** 提交人工介入审核 */
+export const submitReview = async (data: ReviewRequest): Promise<void> => {
+    return request.post('/client/agent/review', data);
+};
+
+/** 获取执行上下文 */
+export const getExecutionContext = async (conversationId: string): Promise<ExecutionContextResponse> => {
+    return request.get(`/client/agent/context/${conversationId}`);
+};
+
+/** 更新执行上下文 */
+export const updateExecutionContext = async (
+    conversationId: string,
+    modifications: Record<string, any>
+): Promise<void> => {
+    return request.put(`/client/agent/context/${conversationId}`, { modifications });
+};
