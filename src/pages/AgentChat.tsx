@@ -120,6 +120,20 @@ const AgentChat: React.FC = () => {
             // 查询历史消息
             const history = await getChatHistory(cid);
 
+            // 辅助函数：解析可能被 JSON 字符串化的 content
+            const parseContent = (content: string | null | undefined): string => {
+                if (!content) return '';
+                // 如果 content 是被 JSON 序列化的字符串 (以引号开头结尾)
+                if (content.startsWith('"') && content.endsWith('"')) {
+                    try {
+                        return JSON.parse(content);
+                    } catch {
+                        return content;
+                    }
+                }
+                return content;
+            };
+
             if (history) { // Assuming history is the array or data object
                 // If API returns unwrapped array:
                 const data = Array.isArray(history) ? history : (history as any).data || [];
@@ -127,15 +141,15 @@ const AgentChat: React.FC = () => {
                 // 转换为前端消息格式
                 const historyMessages: ChatMessage[] = data.map((msg: any) => ({
                     role: msg.role,
-                    content: msg.content,
+                    content: parseContent(msg.content),
                     nodes: (msg.nodes || []).map((node: any) => ({
                         nodeId: node.nodeId,
                         nodeName: node.nodeName,
                         status: node.status as 'pending' | 'running' | 'completed' | 'error',
-                        content: node.content || '',
+                        content: parseContent(node.content),
                         startTime: 0, // History messages don't need precise startTime for display
                         duration: node.duration,
-                        result: node.result,
+                        result: parseContent(node.result),
                         progress: node.progress
                     })),
                     timestamp: msg.timestamp,
@@ -420,15 +434,20 @@ const AgentChat: React.FC = () => {
                         setActiveNodeId(data.nodeId);
                     }
                 } else if (data.status === 'completed') {
-                    const node = currentMsg.nodes.find(n => n.nodeId === data.nodeId);
+                    // 先通过 nodeId 匹配，如果找不到则回退到 nodeName 匹配
+                    let node = currentMsg.nodes.find(n => n.nodeId === data.nodeId);
+                    if (!node && data.nodeName) {
+                        // Fallback: 通过 nodeName 匹配（用于隐式创建的节点）
+                        node = currentMsg.nodes.find(n => n.nodeName === data.nodeName && n.status === 'running');
+                    }
                     if (node) {
                         node.status = 'completed';
                         node.duration = data.durationMs;
                         node.result = data.result;
-                        node.progress = data.progress;  // \u65b0\u589e
+                        node.progress = data.progress;
                     }
 
-                    // \u66f4\u65b0 DAG \u8fdb\u5ea6
+                    // 更新 DAG 进度
                     if (data.progress && currentMsg.dagProgress) {
                         currentMsg.dagProgress = {
                             current: data.progress.current,
@@ -437,7 +456,11 @@ const AgentChat: React.FC = () => {
                         };
                     }
                 } else if (data.status === 'failed') {
-                    const node = currentMsg.nodes.find(n => n.nodeId === data.nodeId);
+                    // 先通过 nodeId 匹配，如果找不到则回退到 nodeName 匹配
+                    let node = currentMsg.nodes.find(n => n.nodeId === data.nodeId);
+                    if (!node && data.nodeName) {
+                        node = currentMsg.nodes.find(n => n.nodeName === data.nodeName && n.status === 'running');
+                    }
                     if (node) {
                         node.status = 'error';
                         node.duration = data.durationMs;
