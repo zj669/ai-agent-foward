@@ -160,11 +160,18 @@ const AgentEditor: React.FC = () => {
                         const businessType = node.type || 'UNKNOWN';
                         const typeDef = nodeTypeMap.get(businessType) as any;
 
+                        // If modelId exists, do not show custom configuration (apiKey, baseUri)
+                        const nodeData = { ...node.data };
+                        if (nodeData.modelId) {
+                            delete nodeData.apiKey;
+                            delete nodeData.baseUri;
+                        }
+
                         return {
                             ...node,
                             type: 'custom', // Use custom node type for visual rendering
                             data: {
-                                ...node.data,
+                                ...nodeData,
                                 nodeType: businessType,
                                 supportedConfigs: typeDef?.supportedConfigs || [],
                             }

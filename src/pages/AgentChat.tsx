@@ -314,6 +314,11 @@ const AgentChat: React.FC = () => {
             if (!conversationId) {
                 setConversationId(chatConversationId);
                 conversationIdRef.current = chatConversationId;
+                // 新对话时，立即添加到历史记录列表
+                setConversations(prev => {
+                    if (prev.find(c => c.conversationId === chatConversationId)) return prev;
+                    return [{ conversationId: chatConversationId }, ...prev];
+                });
             }
 
             const token = localStorage.getItem('token');
@@ -664,6 +669,15 @@ const AgentChat: React.FC = () => {
                 {/* Header */}
                 <div className="h-16 flex items-center justify-between px-6 bg-slate-950/80 backdrop-blur-md shrink-0 z-10 sticky top-0 border-b border-slate-800">
                     <div className="font-semibold text-slate-200 flex items-center gap-3">
+                        {/* 移动端返回按钮 - 仅在侧边栏隐藏时显示 */}
+                        <Tooltip title="返回仪表盘" className="md:hidden">
+                            <Button
+                                type="text"
+                                icon={<ArrowLeftOutlined />}
+                                onClick={() => navigate('/dashboard')}
+                                className="md:hidden text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+                            />
+                        </Tooltip>
                         <div className={`w-2.5 h-2.5 rounded-full ${conversationId ? 'bg-emerald-500 shadow-glow animate-pulse' : 'bg-slate-600'}`} />
                         <div>
                             <div className="text-sm font-bold text-slate-100">{conversationId ? `SESSION: ${conversationId}` : 'New Session'}</div>

@@ -51,47 +51,56 @@ interface ModelConfigProps {
 
 const ModelConfig: React.FC<ModelConfigProps> = ({ configDef, fieldDefs }) => {
     const form = Form.useFormInstance();
-    const modelId = Form.useWatch(['MODEL', 'modelId'], form);
-
-    // Determine if custom mode is active (modelId is null/undefined or explicitly 'custom' logic if we added it)
-    // Our logic: if modelId is selected, it's platform mode. If we want custom, we clear modelId.
-    const [mode, setMode] = useState<'platform' | 'custom'>(!modelId ? 'custom' : 'platform');
-
-    // Update mode when modelId changes externally (e.g. initial load)
-    useEffect(() => {
-        if (modelId) {
-            setMode('platform');
-        } else if (mode === 'platform' && !modelId) {
-            // If we are in platform mode but modelId is empty, stay in platform waiting for selection
-            // unless we specifically switched to custom. 
-        }
-    }, [modelId]);
-
-    const handleModeChange = (e: any) => {
-        const newMode = e.target.value;
-        setMode(newMode);
-        if (newMode === 'custom') {
-            form.setFieldValue(['MODEL', 'modelId'], null);
-        } else {
-            // When switching back to platform, maybe select the first available model? 
-            // Or just clear custom fields? Let's keep it simple.
-        }
-    };
+    const modelSource = Form.useWatch(['MODEL', 'modelSource'], form);
 
     // Filter fields based on mode
     const customFields = ['baseUrl', 'apiKey', 'modelName'];
     const commonFields = fieldDefs.filter(f => !customFields.includes(f.fieldName));
 
+    // State to store previous modelId for restoration
+    const [prevModelId, setPrevModelId] = React.useState<string | undefined>(undefined);
+
+    const handleModeChange = (e: any) => {
+        const newSource = e.target.value;
+        const currentModelId = form.getFieldValue(['MODEL', 'modelId']);
+
+        // Update modelSource field in form
+        form.setFieldValue(['MODEL', 'modelSource'], newSource);
+
+        if (newSource === 'platform') {
+            // Restore previous modelId if available
+            if (prevModelId) {
+                form.setFieldValue(['MODEL', 'modelId'], prevModelId);
+            }
+            // Clear custom fields when switching to system model
+            form.setFieldValue(['MODEL', 'apiKey'], undefined);
+            form.setFieldValue(['MODEL', 'baseUrl'], undefined);
+            form.setFieldValue(['MODEL', 'modelName'], undefined);
+        } else {
+            // Store current modelId before clearing
+            if (currentModelId) {
+                setPrevModelId(currentModelId);
+            }
+            // Clear modelId when switching to custom
+            form.setFieldValue(['MODEL', 'modelId'], undefined);
+        }
+    };
+
     return (
         <div className="mb-4">
             <Form.Item label="模型来源">
-                <Radio.Group value={mode} onChange={handleModeChange} optionType="button" buttonStyle="solid">
+                <Radio.Group value={modelSource} onChange={handleModeChange} optionType="button" buttonStyle="solid">
                     <Radio.Button value="platform">系统预置</Radio.Button>
                     <Radio.Button value="custom">自定义</Radio.Button>
                 </Radio.Group>
             </Form.Item>
 
-            {mode === 'platform' && (
+            {/* Hidden field to store modelSource */}
+            <Form.Item name={['MODEL', 'modelSource']} hidden>
+                <Input />
+            </Form.Item>
+
+            {modelSource === 'platform' && (
                 <Form.Item
                     name={['MODEL', 'modelId']}
                     label="选择模型"
@@ -107,7 +116,7 @@ const ModelConfig: React.FC<ModelConfigProps> = ({ configDef, fieldDefs }) => {
                 </Form.Item>
             )}
 
-            {mode === 'custom' && (
+            {modelSource === 'custom' && (
                 <div className="bg-gray-50 p-3 rounded mb-4 border border-gray-100">
                     <p className="text-xs text-gray-500 mb-2">请输入自定义模型的连接信息</p>
                     {fieldDefs.filter(f => customFields.includes(f.fieldName)).map(field => (
@@ -191,6 +200,35 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
     const [configDefsMap, setConfigDefsMap] = useState<Record<string, ConfigDef>>({});
     const [form] = Form.useForm();
 
+    // Helper to process and clean initial values before form initialization
+    const processInitialValues = (rawConfig: any) => {
+        const config = JSON.parse(JSON.stringify(rawConfig || {}));
+
+        if (config.MODEL) {
+            // Case 1: Has explicit modelSource
+            if (config.MODEL.modelSource) {
+                // If platform source, ensure sensitive fields are cleaned up
+                if (config.MODEL.modelSource === 'platform') {
+                    delete config.MODEL.apiKey;
+                    delete config.MODEL.baseUrl;
+                    delete config.MODEL.modelName;
+                }
+            }
+            // Case 2: No explicit source, infer from modelId (Migration/Compat)
+            else if (config.MODEL.modelId) {
+                config.MODEL.modelSource = 'platform';
+                delete config.MODEL.apiKey;
+                delete config.MODEL.baseUrl;
+                delete config.MODEL.modelName;
+            }
+            // Case 3: Default to custom
+            else {
+                config.MODEL.modelSource = 'custom';
+            }
+        }
+        return config;
+    };
+
     // Load configs when selected node changes
     useEffect(() => {
         if (!selectedNode) return;
@@ -253,13 +291,13 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
             setConfigDefsMap(configsMap);
             setFieldDefsMap(fieldsMap);
 
-            // Set form values
-            // Use data.config which is already structured by graphConverter.ts as {MODEL: {...}, USER_PROMPT: {...} }
-            const currentConfig = (selectedNode.data?.config as any) || {};
+            // Process and set form values
+            const rawConfig = (selectedNode.data?.config as any) || {};
+            const cleanConfig = processInitialValues(rawConfig);
 
             // Reset fields before setting new values to ensure independence
             form.resetFields();
-            form.setFieldsValue(currentConfig);
+            form.setFieldsValue(cleanConfig);
         };
 
         load();
@@ -267,7 +305,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
         return () => {
             active = false;
         };
-    }, [selectedNode?.id, selectedNode?.data?.supportedConfigs]); // Add supportedConfigs to dependency
+    }, [selectedNode?.id, selectedNode?.data?.supportedConfigs, form]);
 
     const handleValuesChange = (changedValues: any, allValues: any) => {
         if (selectedNodeId) {
