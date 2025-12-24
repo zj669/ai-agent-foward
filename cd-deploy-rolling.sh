@@ -33,8 +33,8 @@ sleep ${STARTUP_WAIT}
 HEALTH_CHECK_PASSED=false
 
 for i in {1..20}; do
-  # 检查nginx是否响应
-  if docker exec ${NEW_CONTAINER} wget -q -O /dev/null http://localhost:80/ 2>/dev/null; then
+  # 从宿主机检查临时端口(更可靠)
+  if curl -s -f http://localhost:${TEMP_PORT}/health > /dev/null 2>&1; then
     echo "✅ 新容器健康检查通过"
     HEALTH_CHECK_PASSED=true
     break
@@ -71,7 +71,7 @@ docker run -d \
 # 验证生产端口
 echo "验证生产端口..."
 sleep ${STARTUP_WAIT}
-if docker exec ${CONTAINER_NAME} wget -q -O /dev/null http://localhost:80/ 2>/dev/null; then
+if curl -s -f http://localhost:${PORT}/health > /dev/null 2>&1; then
   echo "✅ 滚动部署成功"
   # 清理旧容器
   docker stop ${CONTAINER_NAME}-old 2>/dev/null || true
