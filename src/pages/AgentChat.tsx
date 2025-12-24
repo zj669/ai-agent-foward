@@ -149,6 +149,7 @@ const AgentChat: React.FC = () => {
         setCompletedNodeIds([]);
         setErrorNodeId(null);
         setPausedNodeId(null);
+        setInterventionState(null);
     };
 
     const startNewChat = () => {
@@ -224,6 +225,29 @@ const AgentChat: React.FC = () => {
                 throw new Error('加载失败');
             }
 
+            // 尝试恢复人工介入状态
+            try {
+                const { getContextSnapshot } = await import('@/api/agent');
+                const snapshot = await getContextSnapshot(cid);
+
+                if (snapshot && snapshot.pausedNodeId) {
+                    // 恢复人工介入状态
+                    setInterventionState({
+                        isPaused: true,
+                        conversationId: cid,
+                        nodeId: snapshot.pausedNodeId,
+                        nodeName: snapshot.pausedNodeName || '未知节点',
+                        checkMessage: snapshot.checkMessage || '请审核此内容',
+                        allowModifyOutput: snapshot.allowModifyOutput
+                    });
+                    setPausedNodeId(snapshot.pausedNodeId);
+                    console.log('已恢复人工介入状态:', snapshot.pausedNodeId);
+                }
+            } catch (snapshotError: any) {
+                // 如果没有快照或加载失败，不影响主流程
+                console.log('未找到暂停状态或加载失败:', snapshotError.message);
+            }
+
         } catch (e: any) {
             console.error('加载历史消息失败', e);
             message.error('加载历史消息失败: ' + (e.message || '未知错误'));
@@ -257,6 +281,7 @@ const AgentChat: React.FC = () => {
                         const checkMessage = data.result?.replace('WAITING_FOR_HUMAN:', '') || '请审核此内容';
                         setInterventionState({
                             isPaused: true,
+                            conversationId: conversationIdRef.current,
                             nodeId: data.nodeId,
                             nodeName: data.nodeName,
                             checkMessage: checkMessage,
@@ -588,25 +613,52 @@ const AgentChat: React.FC = () => {
         });
     };
 
-    const handleStop = () => {
+    const handleStop = async () => {
+        // 1. 取消前端请求
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
-            setLoading(false);
-            setMessages(prev => {
-                const newMsgs = [...prev];
-                const lastMsg = newMsgs[newMsgs.length - 1];
-                if (lastMsg && lastMsg.loading) {
-                    lastMsg.loading = false;
-                    lastMsg.nodes.forEach(n => {
-                        if (n.status === 'running') n.status = 'error';
-                    });
-                }
-                return newMsgs;
-            });
-            setActiveNodeId(null);
-            setErrorNodeId(activeNodeId);
         }
+
+        // 2. 调用后端取消接口
+        if (conversationIdRef.current) {
+            try {
+                const token = localStorage.getItem('token');
+                const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:8080';
+
+                await fetch(`${API_BASE_URL}/client/agent/cancel`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
+                    body: JSON.stringify({
+                        conversationId: conversationIdRef.current
+                    })
+                });
+
+                console.log('Cancellation request sent');
+            } catch (error) {
+                console.warn('Failed to send cancellation request', error);
+                // 不影响前端状态更新
+            }
+        }
+
+        // 3. 更新前端状态
+        setLoading(false);
+        setMessages(prev => {
+            const newMsgs = [...prev];
+            const lastMsg = newMsgs[newMsgs.length - 1];
+            if (lastMsg && lastMsg.loading) {
+                lastMsg.loading = false;
+                lastMsg.nodes.forEach(n => {
+                    if (n.status === 'running') n.status = 'error';
+                });
+            }
+            return newMsgs;
+        });
+        setActiveNodeId(null);
+        setErrorNodeId(activeNodeId);
     };
 
 
@@ -724,17 +776,19 @@ const AgentChat: React.FC = () => {
                                     {messages.map((msg, index) => (
                                         <div key={index}>
                                             <MessageBubble message={msg} />
-                                            {index === messages.length - 1 && interventionState?.isPaused && (
-                                                <div style={{ maxWidth: '80%', marginTop: 8 }}>
-                                                    <HumanInterventionReview
-                                                        conversationId={conversationId}
-                                                        nodeId={interventionState.nodeId!}
-                                                        nodeName={interventionState.nodeName!}
-                                                        checkMessage={interventionState.checkMessage!}
-                                                        onReview={handleReviewSubmit}
-                                                    />
-                                                </div>
-                                            )}
+                                            {index === messages.length - 1 &&
+                                                interventionState?.isPaused &&
+                                                interventionState?.conversationId === conversationId && (
+                                                    <div style={{ maxWidth: '80%', marginTop: 8 }}>
+                                                        <HumanInterventionReview
+                                                            conversationId={conversationId}
+                                                            nodeId={interventionState.nodeId!}
+                                                            nodeName={interventionState.nodeName!}
+                                                            checkMessage={interventionState.checkMessage!}
+                                                            onReview={handleReviewSubmit}
+                                                        />
+                                                    </div>
+                                                )}
                                         </div>
                                     ))}
                                     {loading && messages.length > 0 && !interventionState?.isPaused && (

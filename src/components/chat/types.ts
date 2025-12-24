@@ -4,6 +4,7 @@ export type NodeExecutionStatus = 'pending' | 'running' | 'completed' | 'error' 
 /* 人工介入状态 */
 export interface HumanInterventionState {
     isPaused: boolean;
+    conversationId?: string; // Add conversationId to track which session this belongs to
     nodeId?: string;
     nodeName?: string;
     checkMessage?: string;
