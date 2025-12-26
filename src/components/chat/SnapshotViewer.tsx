@@ -18,7 +18,7 @@ const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ conversationId, onSnaps
     const [snapshot, setSnapshot] = useState<ExecutionContextSnapshot | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [modifications, setModifications] = useState<SnapshotModifications>({});
+    const [modifications, setModifications] = useState<Record<string, any>>({});
     const [hasChanges, setHasChanges] = useState(false);
 
     const loadSnapshot = async () => {
@@ -55,7 +55,12 @@ const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ conversationId, onSnaps
         }
         setSaving(true);
         try {
-            await updateContextSnapshot(conversationId, modifications);
+            // Construct payload based on new structure
+            const payload: SnapshotModifications = {
+                stateData: modifications
+            };
+
+            await updateContextSnapshot(conversationId, payload);
             message.success('快照已更新');
             await loadSnapshot(); // Reload to confirm changes
         } catch (e: any) {
@@ -84,25 +89,45 @@ const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ conversationId, onSnaps
         return <Alert type="warning" message="未找到执行上下文快照" showIcon />;
     }
 
-    // Default fields if backend doesn't provide metadata (Backward compatibility)
+    // Adapt to new API structure: use stateData keys
+    // If editableFields are provided by backend, use them.
+    // Otherwise, define default fields mapping to stateData keys.
     const defaultFields: EditableFieldMeta[] = [
-        { key: 'nodeResults', label: '节点结果', type: 'json', description: '', editable: true },
-        { key: 'userInput', label: '用户输入', type: 'text', description: '', editable: true },
-        { key: 'customVariables', label: '自定义变量', type: 'json', description: '', editable: true },
-        { key: 'messageHistory', label: '消息历史', type: 'messages', description: '', editable: true },
+        // Map 'execution_history' (API v2) to NodeResultsEditor
+        { key: 'execution_history', label: '节点执行历史', type: 'json', description: '各个节点的执行结果记录', editable: true },
+        // Map 'user_input' (API v2) to UserInputEditor
+        { key: 'user_input', label: '用户输入', type: 'text', description: '用户的原始输入内容', editable: true },
+        // Map 'custom_variables' or generic variables to VariablesEditor
+        { key: 'custom_variables', label: '自定义变量', type: 'json', description: '工作流中的自定义变量', editable: true },
+        // Map 'message_history' or 'chat_history' to MessageHistoryEditor
+        { key: 'message_history', label: '消息历史', type: 'messages', description: '对话历史记录', editable: true },
     ];
+
+    // Fallback for legacy snapshot structure if stateData is missing but legacy fields exist
+    // This handles the transition period
+    if (!snapshot.stateData) {
+        // Assume legacy structure
+        snapshot.stateData = {
+            execution_history: (snapshot as any).nodeResults,
+            user_input: (snapshot as any).userInput,
+            custom_variables: (snapshot as any).customVariables,
+            message_history: (snapshot as any).messageHistory
+        };
+    }
 
     const fields = (snapshot.editableFields && snapshot.editableFields.length > 0)
         ? snapshot.editableFields
         : defaultFields;
 
     const renderEditor = (field: EditableFieldMeta) => {
-        const val = (modifications as any)[field.key] ?? (snapshot as any)[field.key];
+        // Value priority: modifications -> snapshot.stateData -> snapshot (legacy fallback)
+        const val = modifications[field.key] ?? snapshot.stateData?.[field.key] ?? (snapshot as any)[field.key];
 
+        // Map component types
         switch (field.type) {
             case 'json':
-                // Special case for customVariables to use specific editor
-                if (field.key === 'customVariables') {
+                // Use VariablesEditor for variables-like data
+                if (field.key.includes('variable')) {
                     return <VariablesEditor value={val} onChange={(v) => handleFieldChange(field.key, v)} />;
                 }
                 return <NodeResultsEditor value={val} onChange={(v) => handleFieldChange(field.key, v)} />;
@@ -110,6 +135,9 @@ const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ conversationId, onSnaps
                 return <UserInputEditor value={val} onChange={(v) => handleFieldChange(field.key, v)} />;
             case 'messages':
                 return <MessageHistoryEditor value={val} onChange={(v) => handleFieldChange(field.key, v)} />;
+            case 'list':
+                // Simple list editor fallback to JSON for now
+                return <NodeResultsEditor value={val} onChange={(v) => handleFieldChange(field.key, v)} />;
             default:
                 return <Alert message={`Unsupported field type: ${field.type}`} type="warning" />;
         }
@@ -134,7 +162,11 @@ const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ conversationId, onSnaps
                 <Space>
                     <EyeOutlined style={{ color: '#1677ff' }} />
                     <Typography.Text strong>执行上下文快照</Typography.Text>
-                    <Tag color="orange">暂停节点: {snapshot.pausedNodeName}</Tag>
+                    {snapshot.pausedNodeName ? (
+                        <Tag color="orange">暂停节点: {snapshot.pausedNodeName}</Tag>
+                    ) : (
+                        <Tag color={snapshot.status === 'COMPLETED' ? 'green' : 'blue'}>{snapshot.status}</Tag>
+                    )}
                 </Space>
             }
             extra={
@@ -166,8 +198,8 @@ const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ conversationId, onSnaps
             {/* Read-only Info Header */}
             <div style={{ padding: '12px 0', borderBottom: '1px solid #f0f0f0', marginBottom: 12, color: '#888', fontSize: 12 }}>
                 <Space split="|">
-                    <span>快照时间: {dayjs(snapshot.pausedAt).format('YYYY-MM-DD HH:mm:ss')}</span>
-                    <span>已执行节点数: {snapshot.executedNodeIds?.length || 0}</span>
+                    <span>快照时间: {dayjs(snapshot.timestamp || (snapshot as any).pausedAt).format('YYYY-MM-DD HH:mm:ss')}</span>
+                    <span>最后节点: {snapshot.lastNodeId || (snapshot as any).pausedNodeId || '-'}</span>
                 </Space>
             </div>
 
