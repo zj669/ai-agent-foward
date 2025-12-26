@@ -22,7 +22,11 @@ export interface NodeDefinition {
     nodeType: string;
     nodeName: string;
     position: { x: number; y: number };
-    config: Record<string, any>;
+    // New fields for Template mechanism
+    templateId?: string;
+    userConfig?: string; // JSON string of user configuration
+    // Deprecated but kept for compatibility
+    config?: Record<string, any>;
 }
 
 export interface EdgeDefinition {
@@ -44,10 +48,6 @@ export function convertToGraphJsonSchema(
     description?: string
 ): GraphJsonSchema {
     // 1. 找到起始节点 (没有入边的节点)
-    // 如果没有边，且只有一个节点，该节点就是起始节点
-    // 如果有多个节点但没有边，这可能有问题，但我们取第一个
-    // 更好的逻辑是：没有 target 指向它的节点
-
     const targetIds = new Set(edges.map(e => e.target));
     const startNodes = nodes.filter(n => !targetIds.has(n.id));
 
@@ -57,38 +57,56 @@ export function convertToGraphJsonSchema(
     } else if (nodes.length > 0) {
         // 可能是环状图，或者其它情况，默认取第一个
         startNodeId = nodes[0].id;
-    } else {
-        // 空图，允许保存但不一定能运行
-        // throw new Error('未找到起始节点');
-        // 暂时允许空图保存
     }
 
     // 2. 转换节点
-    const convertedNodes: NodeDefinition[] = nodes.map(node => ({
-        nodeId: node.id,
-        nodeType: (node.data?.nodeType as string) || node.type || 'UNKNOWN',
-        nodeName: node.data?.label as string || '未命名节点',
-        position: {
-            x: Math.round(node.position.x),
-            y: Math.round(node.position.y)
-        },
-        config: convertNodeConfig(node.data?.config as Record<string, any> || {})
-    }));
+    const convertedNodes: NodeDefinition[] = nodes.map(node => {
+        const nodeData = node.data || {};
 
-    // 3. 转换边 (保留 edgeType)
+        // Convert config object to userConfig JSON string if templateId exists
+        let userConfig: string | undefined = undefined;
+        let config: Record<string, any> | undefined = undefined;
+
+        // Ensure we are working with Key-Value pairs that align with backend expectations
+        // The node.data.config usually stores values as { MODULE: { field: value } }
+        // We perform the key conversion (UPPER_SNAKE -> camelCase) here
+        const configObject = convertNodeConfig(nodeData.config as Record<string, any> || {});
+
+        if (nodeData.templateId) {
+            userConfig = JSON.stringify(configObject);
+        } else {
+            // Fallback for legacy nodes without templateId
+            config = configObject;
+        }
+
+        return {
+            nodeId: node.id,
+            nodeType: (nodeData.nodeType as string) || node.type || 'UNKNOWN',
+            nodeName: nodeData.label as string || '未命名节点',
+            position: {
+                x: Math.round(node.position.x),
+                y: Math.round(node.position.y)
+            },
+            templateId: nodeData.templateId as string | undefined,
+            userConfig: userConfig,
+            config: config
+        };
+    });
+
+    // 3. 转换边 (保留 edgeType, condition)
     const convertedEdges: EdgeDefinition[] = edges.map(edge => ({
         edgeId: edge.id,
         source: edge.source,
         target: edge.target,
         label: edge.label as string || undefined,
-        condition: undefined,
+        condition: (edge.data?.condition as string) || undefined,
         edgeType: (edge.data?.edgeType as string) || 'DEPENDENCY'
     }));
 
     // 4. 组装完整结构
     return {
         dagId: `dag-${uuidv4()}`,
-        version: '1.0',
+        version: '2.0', // Update version to 2.0
         description: description || agentName,
         startNodeId: startNodeId,
         nodes: convertedNodes,
@@ -148,9 +166,6 @@ export function convertFromGraphJsonSchema(schema: GraphJsonSchema): {
         // 尝试判断是否是旧格式（即直接是 { nodes: [], edges: [] }）
         const legacySchema = schema as any;
         if (legacySchema.nodes && Array.isArray(legacySchema.nodes)) {
-            // 假设已经是 React Flow 格式或者接近
-            // 但根据问题描述，后端之前存的是前端直接发的，所以可能是 React Flow 格式
-            // 这里做一个简单的检查：如果 node 有 data.config 则直接返回
             if (legacySchema.nodes.length > 0 && legacySchema.nodes[0].data && legacySchema.nodes[0].data.config) {
                 return { nodes: legacySchema.nodes, edges: legacySchema.edges || [] };
             }
@@ -159,17 +174,46 @@ export function convertFromGraphJsonSchema(schema: GraphJsonSchema): {
     }
 
     // 1. 转换节点
-    const nodes: Node[] = schema.nodes.map(node => ({
-        id: node.nodeId,
-        type: node.nodeType,
-        position: node.position,
-        data: {
-            label: node.nodeName,
-            config: reverseConvertNodeConfig(node.config)
-        }
-    }));
+    const nodes: Node[] = schema.nodes.map(node => {
+        let configObj: Record<string, any> = {};
 
-    // 2. 转换边 (恢复 edgeType 到 data)
+        // Parse userConfig if available, otherwise use legacy config
+        if (node.userConfig) {
+            try {
+                const parsed = JSON.parse(node.userConfig);
+                configObj = reverseConvertNodeConfig(parsed);
+            } catch (e) {
+                console.error("Failed to parse userConfig", e);
+            }
+        } else if (node.config) {
+            configObj = reverseConvertNodeConfig(node.config);
+        } else if (typeof node.config === 'string') {
+            // Handle case where legacy config might be a string (though it shouldn't be per interface)
+            try {
+                const parsed = JSON.parse(node.config);
+                configObj = reverseConvertNodeConfig(parsed);
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        return {
+            id: node.nodeId,
+            type: node.nodeType,
+            position: node.position,
+            data: {
+                label: node.nodeName,
+                nodeType: node.nodeType,
+                templateId: node.templateId, // Restore templateId
+                config: configObj,
+                // Note: supportedConfigs and other template metadata are NOT stored in the graph JSON
+                // They need to be re-fetched or re-associated in the editor if needed.
+                // Usually the editor fetches templates on load and can match by templateId.
+            }
+        };
+    });
+
+    // 2. 转换边 (恢复 edgeType, condition 到 data)
     const edges: Edge[] = (schema.edges || []).map(edge => ({
         id: edge.edgeId,
         source: edge.source,
@@ -177,7 +221,8 @@ export function convertFromGraphJsonSchema(schema: GraphJsonSchema): {
         label: edge.label,
         type: 'custom', // Force custom edge type for visual rendering
         data: {
-            edgeType: edge.edgeType || 'DEPENDENCY'
+            edgeType: edge.edgeType || 'DEPENDENCY',
+            condition: edge.condition
         }
     }));
 

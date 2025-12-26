@@ -1,12 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAgentStore } from '@/store/useAgentStore';
-import { getNodeTypes } from '@/api/config';
+import { getNodeTemplates, NodeTemplate } from '@/api/config';
 import {
     CodeSandboxOutlined,
-    RobotOutlined,
-    ApiOutlined,
-    GatewayOutlined,
-    FileTextOutlined,
     AppstoreOutlined
 } from '@ant-design/icons';
 import llmIcon from '@/assets/icons/llm.svg';
@@ -19,25 +15,34 @@ import reactIcon from '@/assets/icons/react.svg';
 import actIcon from '@/assets/icons/act.svg';
 
 const Sidebar: React.FC = () => {
-    const { nodeTypes, setNodeTypes } = useAgentStore();
+    // nodeTypes in store might need to handle NodeTemplate[], but since it is likely any[], we treat it as such for now
+    // Ideally we should update the store type, but for now we just feed it the templates
+    const { setNodeTypes } = useAgentStore();
+    const [templates, setTemplates] = useState<NodeTemplate[]>([]);
 
     useEffect(() => {
         const fetchTypes = async () => {
             try {
-                const types = await getNodeTypes();
-                const typesArray = (Array.isArray(types) ? types : (types as any)?.data || []) as any[];
-                setNodeTypes(typesArray);
+                // Use new API to get templates
+                const result = await getNodeTemplates();
+                const templateList = (Array.isArray(result) ? result : (result as any)?.data || []) as NodeTemplate[];
+                setTemplates(templateList);
+                setNodeTypes(templateList);
             } catch (error) {
-                console.error('Failed to load node types', error);
+                console.error('Failed to load node templates', error);
             }
         };
         fetchTypes();
     }, [setNodeTypes]);
 
-    const onDragStart = (event: React.DragEvent, nodeType: string, nodeData: any) => {
+    const onDragStart = (event: React.DragEvent, template: NodeTemplate) => {
         event.dataTransfer.setData('application/reactflow/type', 'custom');
-        event.dataTransfer.setData('application/reactflow/label', nodeData.nodeName);
-        event.dataTransfer.setData('application/reactflow/data', JSON.stringify(nodeData));
+        // Use templateLabel as node variable name/label default
+        event.dataTransfer.setData('application/reactflow/label', template.templateLabel);
+
+        // Pass the entire template object as data
+        // This ensures templateId, supportedConfigs, etc are available on the new node
+        event.dataTransfer.setData('application/reactflow/data', JSON.stringify(template));
         event.dataTransfer.effectAllowed = 'move';
     };
 
@@ -49,7 +54,6 @@ const Sidebar: React.FC = () => {
         if (name.includes('api')) return <img src={apiIcon} alt="API" className="w-8 h-8" />;
         if (name.includes('router')) return <img src={routerIcon} alt="ROUTER" className="w-8 h-8" />;
 
-        // New types
         if (name.includes('act')) return <img src={actIcon} alt="ACT" className="w-8 h-8" />;
         if (name.includes('human')) return <img src={humanIcon} alt="HUMAN" className="w-8 h-8" />;
         if (name.includes('plan')) return <img src={planIcon} alt="PLAN" className="w-8 h-8" />;
@@ -84,33 +88,33 @@ const Sidebar: React.FC = () => {
                     <span className="font-bold text-gray-700">组件库</span>
                     <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full font-medium">拖拽上屏</span>
                 </div>
-                <span className="text-xs text-gray-400">Total: {nodeTypes.length}</span>
+                <span className="text-xs text-gray-400">Total: {templates.length}</span>
             </div>
 
             <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 flex gap-5 items-center scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                {nodeTypes.map((node) => (
+                {templates.map((template) => (
                     <div
-                        key={node.nodeType}
+                        key={template.templateId}
                         draggable
-                        onDragStart={(event) => onDragStart(event, 'custom', node)}
+                        onDragStart={(event) => onDragStart(event, template)}
                         className="flex-shrink-0 cursor-move group"
                     >
                         <div className="w-48 h-24 bg-white rounded-xl border border-gray-100 p-3 flex flex-col justify-between shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group-hover:border-blue-200">
                             {/* Hover Gradient Overlay */}
-                            <div className={`absolute top-0 left-0 w-1 h-full ${getGradient(node.icon)} opacity-0 group-hover:opacity-100 transition-opacity`} />
+                            <div className={`absolute top-0 left-0 w-1 h-full ${getGradient(template.icon)} opacity-0 group-hover:opacity-100 transition-opacity`} />
 
                             <div className="flex items-start gap-3 z-10">
-                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center shadow-md ${getGradient(node.icon)} transform group-hover:scale-110 transition-transform duration-300`}>
-                                    {getIcon(node.icon)}
+                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center shadow-md ${getGradient(template.icon)} transform group-hover:scale-110 transition-transform duration-300`}>
+                                    {getIcon(template.icon)}
                                 </div>
                                 <div className="flex-1 min-w-0 pt-0.5">
-                                    <div className="font-bold text-gray-800 text-sm truncate group-hover:text-blue-600 transition-colors">{node.nodeName}</div>
-                                    <div className="text-[10px] text-gray-400 font-mono mt-0.5">{node.nodeType}</div>
+                                    <div className="font-bold text-gray-800 text-sm truncate group-hover:text-blue-600 transition-colors">{template.templateLabel}</div>
+                                    <div className="text-[10px] text-gray-400 font-mono mt-0.5">{template.nodeType}</div>
                                 </div>
                             </div>
 
                             <div className="text-xs text-gray-400 line-clamp-1 pl-1">
-                                {node.description || '功能组件'}
+                                {template.description || '功能组件'}
                             </div>
 
                             {/* Plus Icon on Hover (Visual Cue) */}

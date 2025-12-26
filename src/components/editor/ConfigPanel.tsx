@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAgentStore } from '@/store/useAgentStore';
-import { getConfigDefinitions, getConfigFieldDefinitions } from '@/api/config';
+import { getConfigDefinitions, getConfigFieldDefinitions, getConfigSchema } from '@/api/config';
 import { Form, Input, Select, InputNumber, Checkbox, Switch, Button, Spin, Empty, Divider, message, Radio, Tooltip, Modal } from 'antd';
 import { InfoCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 
@@ -255,7 +255,43 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
                 setLoading(true);
                 try {
                     await Promise.all(missingConfigs.map(async (configType) => {
-                        // Fetch definitions if missing
+                        // Try new Schema API first
+                        try {
+                            const res = await getConfigSchema(configType);
+                            // Unwrap response structure if needed, assuming res.data or res itself is schema
+                            const schema = (res as any).data || res;
+
+                            if (schema && schema.module) {
+                                // Map Schema to ConfigDef
+                                const configDef: ConfigDef = {
+                                    configType: schema.module,
+                                    configName: schema.displayName,
+                                    description: schema.description,
+                                    // Schema fields might have options, but legacy ConfigDef needs options for Top-Level Select (like MODEL/ADVISOR)
+                                    // We'll see if we can adapt or if we need to inspect specific fields
+                                    options: []
+                                };
+
+                                // Map Schema Fields to FieldDef
+                                const fieldDefs: FieldDef[] = (schema.fields || []).map((f: any) => ({
+                                    fieldName: f.name,
+                                    fieldLabel: f.label,
+                                    fieldType: f.type,
+                                    required: f.required,
+                                    defaultValue: f.defaultValue,
+                                    options: f.options,
+                                    description: f.placeholder
+                                }));
+
+                                configCache.defs[configType] = configDef;
+                                configCache.fields[configType] = fieldDefs;
+                                return;
+                            }
+                        } catch (e) {
+                            // Ignore and fallback to legacy
+                        }
+
+                        // Fallback to legacy APIs
                         const [configDefArray, fields] = await Promise.all([
                             getConfigDefinitions(configType).catch(() => []),
                             getConfigFieldDefinitions(configType).catch(() => [])
