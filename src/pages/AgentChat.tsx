@@ -685,7 +685,7 @@ const AgentChat: React.FC = () => {
                 const token = localStorage.getItem('token');
                 const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:8080';
 
-                await fetch(`${API_BASE_URL}/client/agent/cancel`, {
+                await fetch(`${API_BASE_URL}/client/chat/cancel`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
