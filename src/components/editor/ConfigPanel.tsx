@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAgentStore } from '@/store/useAgentStore';
-import { getConfigDefinitions, getConfigFieldDefinitions, getConfigSchema } from '@/api/config';
+import { getConfigSchema } from '@/api/config';
 import { Form, Input, Select, InputNumber, Checkbox, Switch, Button, Spin, Empty, Divider, message, Radio, Tooltip, Modal } from 'antd';
 import { InfoCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 
@@ -258,29 +258,28 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
                         // Try new Schema API first
                         try {
                             const res = await getConfigSchema(configType);
-                            // Unwrap response structure if needed, assuming res.data or res itself is schema
-                            const schema = (res as any).data || res;
+                            // res is already unwrapped by request interceptor, should be the fields array directly
+                            const schema = res;
 
-                            if (schema && schema.module) {
-                                // Map Schema to ConfigDef
+                            // Check if schema is an array of fields (new API format)
+                            if (Array.isArray(schema) && schema.length > 0) {
+                                // Create a simple ConfigDef for this config type
                                 const configDef: ConfigDef = {
-                                    configType: schema.module,
-                                    configName: schema.displayName,
-                                    description: schema.description,
-                                    // Schema fields might have options, but legacy ConfigDef needs options for Top-Level Select (like MODEL/ADVISOR)
-                                    // We'll see if we can adapt or if we need to inspect specific fields
+                                    configType: configType,
+                                    configName: configType,
+                                    description: `${configType} 配置`,
                                     options: []
                                 };
 
-                                // Map Schema Fields to FieldDef
-                                const fieldDefs: FieldDef[] = (schema.fields || []).map((f: any) => ({
-                                    fieldName: f.name,
-                                    fieldLabel: f.label,
-                                    fieldType: f.type,
+                                // Map API fields to FieldDef
+                                const fieldDefs: FieldDef[] = schema.map((f: any) => ({
+                                    fieldName: f.fieldName,
+                                    fieldLabel: f.fieldLabel,
+                                    fieldType: f.fieldType,
                                     required: f.required,
                                     defaultValue: f.defaultValue,
-                                    options: f.options,
-                                    description: f.placeholder
+                                    options: f.options ? (typeof f.options === 'string' ? JSON.parse(f.options) : f.options) : undefined,
+                                    description: f.description
                                 }));
 
                                 configCache.defs[configType] = configDef;
@@ -288,21 +287,8 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
                                 return;
                             }
                         } catch (e) {
-                            // Ignore and fallback to legacy
-                        }
-
-                        // Fallback to legacy APIs
-                        const [configDefArray, fields] = await Promise.all([
-                            getConfigDefinitions(configType).catch(() => []),
-                            getConfigFieldDefinitions(configType).catch(() => [])
-                        ]);
-
-                        // Update cache
-                        if (configDefArray && configDefArray.length > 0) {
-                            configCache.defs[configType] = configDefArray[0];
-                        }
-                        if (fields) {
-                            configCache.fields[configType] = fields;
+                            console.error(`Failed to load config schema for ${configType}:`, e);
+                            // No fallback APIs available
                         }
                     }));
                 } catch (e) {

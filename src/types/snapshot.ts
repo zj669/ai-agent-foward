@@ -45,11 +45,5 @@ export interface ExecutionContextSnapshot {
 
 /** 快照修改请求 */
 export interface SnapshotModifications {
-    // 修改现在针对 stateData 内的字段
     stateData?: Record<string, any>;
-    // 兼容旧接口
-    nodeResults?: Record<string, any>;
-    userInput?: string;
-    customVariables?: Record<string, any>;
-    messageHistory?: SnapshotChatMessage[];
 }

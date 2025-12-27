@@ -6,6 +6,7 @@ import SnapshotViewer from './SnapshotViewer';
 const { Text, Title } = Typography;
 
 interface HumanInterventionReviewProps {
+    agentId: string;            // 新增: 需要agentId传递给SnapshotViewer
     conversationId: string;
     nodeId: string;
     nodeName: string;
@@ -14,6 +15,7 @@ interface HumanInterventionReviewProps {
 }
 
 const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
+    agentId,
     conversationId,
     nodeId,
     nodeName,
@@ -77,7 +79,7 @@ const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
 
                         {showSnapshot && (
                             <div style={{ marginTop: 12 }}>
-                                <SnapshotViewer conversationId={conversationId} />
+                                <SnapshotViewer agentId={agentId} conversationId={conversationId} />
                             </div>
                         )}
                     </div>

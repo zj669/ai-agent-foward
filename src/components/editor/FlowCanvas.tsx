@@ -101,6 +101,21 @@ const FlowCanvas: React.FC = () => {
                 console.error('Failed to parse node data', e);
             }
 
+            // Parse editableFields from template
+            // editableFields is a JSON string like '["MODEL", "USER_PROMPT", "TIMEOUT"]'
+            let supportedConfigs: string[] = [];
+            if (extraData.editableFields) {
+                try {
+                    const parsed = typeof extraData.editableFields === 'string'
+                        ? JSON.parse(extraData.editableFields)
+                        : extraData.editableFields;
+                    supportedConfigs = Array.isArray(parsed) ? parsed : [];
+                } catch (e) {
+                    console.warn('Failed to parse editableFields:', e);
+                    supportedConfigs = [];
+                }
+            }
+
             const newNode = {
                 id: `node_${Date.now()}`,
                 type: 'custom',
@@ -109,6 +124,7 @@ const FlowCanvas: React.FC = () => {
                     label: label,
                     ...extraData,
                     nodeType: extraData.nodeType || 'UNKNOWN',
+                    supportedConfigs: supportedConfigs,
                 },
             };
 

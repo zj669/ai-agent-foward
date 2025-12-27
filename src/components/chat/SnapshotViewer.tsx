@@ -10,11 +10,12 @@ import MessageHistoryEditor from './editors/MessageHistoryEditor';
 import dayjs from 'dayjs';
 
 interface SnapshotViewerProps {
+    agentId: string;            // 新增: 需要agentId
     conversationId: string;
     onSnapshotLoaded?: (snapshot: ExecutionContextSnapshot) => void;
 }
 
-const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ conversationId, onSnapshotLoaded }) => {
+const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ agentId, conversationId, onSnapshotLoaded }) => {
     const [snapshot, setSnapshot] = useState<ExecutionContextSnapshot | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -24,7 +25,7 @@ const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ conversationId, onSnaps
     const loadSnapshot = async () => {
         setLoading(true);
         try {
-            const data = await getContextSnapshot(conversationId);
+            const data = await getContextSnapshot(agentId, conversationId);
             setSnapshot(data);
             setModifications({});
             setHasChanges(false);
@@ -38,10 +39,10 @@ const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ conversationId, onSnaps
     };
 
     useEffect(() => {
-        if (conversationId) {
+        if (agentId && conversationId) {
             loadSnapshot();
         }
-    }, [conversationId]);
+    }, [agentId, conversationId]);
 
     const handleFieldChange = (field: string, value: any) => {
         setModifications(prev => ({ ...prev, [field]: value }));
@@ -55,12 +56,13 @@ const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ conversationId, onSnaps
         }
         setSaving(true);
         try {
-            // Construct payload based on new structure
-            const payload: SnapshotModifications = {
-                stateData: modifications
-            };
-
-            await updateContextSnapshot(conversationId, payload);
+            // 根据新的API结构构建 payload
+            await updateContextSnapshot(
+                agentId,
+                conversationId,
+                snapshot.lastNodeId, // 使用最后的节点ID
+                modifications        // 直接传递 stateData
+            );
             message.success('快照已更新');
             await loadSnapshot(); // Reload to confirm changes
         } catch (e: any) {

@@ -132,11 +132,11 @@ const AgentEditor: React.FC = () => {
     const loadAgentData = async (agentId: string) => {
         setLoading(true);
         try {
-            // Fetch agent detail and node types in parallel to enrich graph data
-            const [agent, nodeTypes] = await Promise.all([
+            // Fetch agent detail and node templates in parallel to enrich graph data
+            const [agent, nodeTemplates] = await Promise.all([
                 getAgentDetail(agentId),
-                import('@/api/config').then(mod => mod.getNodeTypes().catch(e => {
-                    console.error('Failed to load node types', e);
+                import('@/api/config').then(mod => mod.getNodeTemplates().catch(e => {
+                    console.error('Failed to load node templates', e);
                     return [];
                 }))
             ]);
@@ -144,10 +144,10 @@ const AgentEditor: React.FC = () => {
             setAgentName(agent.agentName);
             setDescription(agent.description);
 
-            // Create a lookup map for node types
-            // Cast nodeTypes to any[] to handle potential type mismatch with AxiosResponse
-            const typesArray = (Array.isArray(nodeTypes) ? nodeTypes : (nodeTypes as any)?.data || []) as any[];
-            const nodeTypeMap = new Map(typesArray.map((t: any) => [t.nodeType, t]));
+            // Create a lookup map for node templates
+            // Cast nodeTemplates to any[] to handle potential type mismatch with AxiosResponse
+            const templatesArray = (Array.isArray(nodeTemplates) ? nodeTemplates : (nodeTemplates as any)?.data || []) as any[];
+            const nodeTypeMap = new Map(templatesArray.map((t: any) => [t.nodeType, t]));
 
             if (agent.graphJson) {
                 try {
@@ -167,13 +167,28 @@ const AgentEditor: React.FC = () => {
                             delete nodeData.baseUri;
                         }
 
+                        // Parse editableFields from template
+                        // editableFields is a JSON string like '["MODEL", "USER_PROMPT", "TIMEOUT"]'
+                        let supportedConfigs: string[] = [];
+                        if (typeDef?.editableFields) {
+                            try {
+                                const parsed = typeof typeDef.editableFields === 'string'
+                                    ? JSON.parse(typeDef.editableFields)
+                                    : typeDef.editableFields;
+                                supportedConfigs = Array.isArray(parsed) ? parsed : [];
+                            } catch (e) {
+                                console.warn(`Failed to parse editableFields for ${businessType}:`, e);
+                                supportedConfigs = [];
+                            }
+                        }
+
                         return {
                             ...node,
                             type: 'custom', // Use custom node type for visual rendering
                             data: {
                                 ...nodeData,
                                 nodeType: businessType,
-                                supportedConfigs: typeDef?.supportedConfigs || [],
+                                supportedConfigs: supportedConfigs,
                             }
                         };
                     });
@@ -186,7 +201,7 @@ const AgentEditor: React.FC = () => {
 
                     setGraph(enrichedNodes || [], enrichedEdges);
                     // Update global store nodeTypes if needed, though Sidebar checks it self
-                    useAgentStore.getState().setNodeTypes(typesArray);
+                    useAgentStore.getState().setNodeTypes(templatesArray);
 
                 } catch (e) {
                     console.error('Failed to parse graphJson', e);

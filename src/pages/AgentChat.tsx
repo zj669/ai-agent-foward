@@ -10,7 +10,7 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 // @ts-ignore
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { getNewConversationId, getChatHistory, getAgentDetail, getConversationIds } from '../api/agent';
+import { getNewConversationId, getChatHistory, getAgentDetail, getConversationIds, getContextSnapshot } from '../api/agent';
 import '../styles/chat.css'; // Import custom styles
 import MessageBubble from '../components/chat/MessageBubble';
 import EmptyState from '../components/chat/EmptyState';
@@ -62,9 +62,13 @@ const AgentChat: React.FC = () => {
 
     // Load Data
     useEffect(() => {
+        console.log('AgentChat mounted, id:', id);
         if (id) {
+            console.log('Fetching agent info and history for id:', id);
             fetchAgentInfo(id);
             loadConversationHistory(id);
+        } else {
+            console.log('No agent id found in params');
         }
     }, [id]);
 
@@ -78,8 +82,10 @@ const AgentChat: React.FC = () => {
     }, [screens.xl]);
 
     const fetchAgentInfo = async (agentId: string) => {
+        console.log('fetchAgentInfo called for:', agentId);
         try {
             const agent = await getAgentDetail(agentId);
+            // ... (rest of function)
             setAgentName(agent.agentName || 'Agent');
             setAgentDesc(agent.description || '智能助手');
 
@@ -120,9 +126,60 @@ const AgentChat: React.FC = () => {
     };
 
     const loadConversationHistory = async (agentId: string) => {
+        console.log('loadConversationHistory called for agentId:', agentId);
         try {
             const list = await getConversationIds(agentId);
-            setConversations(list.map(item => ({ conversationId: item.conversationId })));
+            console.log('getConversationIds returned list:', list);
+            setConversations(list.map(item => ({ conversationId: item })));
+
+            // 自动选择第一个会话并加载历史消息
+            if (list.length > 0 && !conversationId) {
+                const firstConversationId = list[0];
+                setConversationId(firstConversationId);
+                conversationIdRef.current = firstConversationId;
+
+                // 加载第一个会话的历史消息
+                try {
+                    const history = await getChatHistory(agentId, firstConversationId);
+
+                    // 解析历史消息
+                    const parseContent = (content: string) => {
+                        if (typeof content !== 'string') return content;
+                        try {
+                            return JSON.parse(content);
+                        } catch {
+                            return content;
+                        }
+                    };
+
+                    const parsedMessages = history.map((msg: any) => ({
+                        ...msg,
+                        content: parseContent(msg.content)
+                    }));
+
+                    setMessages(parsedMessages);
+
+                    // 尝试恢复人工介入状态
+                    try {
+                        const snapshot = await getContextSnapshot(agentId, firstConversationId);
+                        if (snapshot && snapshot.status === 'PAUSED') {
+                            setInterventionState({
+                                isPaused: true,
+                                conversationId: firstConversationId,
+                                nodeId: snapshot.lastNodeId,
+                                nodeName: snapshot.stateData?.current_node_name || '未知节点',
+                                checkMessage: snapshot.stateData?.check_message || '请审核此内容',
+                                allowModifyOutput: true
+                            });
+                            setPausedNodeId(snapshot.lastNodeId);
+                        }
+                    } catch (snapshotError: any) {
+                        console.log('未找到暂停状态或加载失败:', snapshotError.message);
+                    }
+                } catch (historyError) {
+                    console.error('Failed to load history for first conversation:', historyError);
+                }
+            }
         } catch (e) {
             console.error('Failed to load history', e);
         }
@@ -174,8 +231,8 @@ const AgentChat: React.FC = () => {
         resetDagState();
 
         try {
-            // 查询历史消息
-            const history = await getChatHistory(cid);
+            // 查询历史消息 - 需要传递agentId
+            const history = await getChatHistory(id!, cid);
 
             // 辅助函数：解析可能被 JSON 字符串化的 content
             const parseContent = (content: string | null | undefined): string => {
@@ -228,20 +285,21 @@ const AgentChat: React.FC = () => {
             // 尝试恢复人工介入状态
             try {
                 const { getContextSnapshot } = await import('@/api/agent');
-                const snapshot = await getContextSnapshot(cid);
+                const snapshot = await getContextSnapshot(id!, cid);
 
-                if (snapshot && snapshot.pausedNodeId) {
+                // 根据新的API结构判断是否处于暂停状态
+                if (snapshot && snapshot.status === 'PAUSED') {
                     // 恢复人工介入状态
                     setInterventionState({
                         isPaused: true,
                         conversationId: cid,
-                        nodeId: snapshot.pausedNodeId,
-                        nodeName: snapshot.pausedNodeName || '未知节点',
-                        checkMessage: snapshot.checkMessage || '请审核此内容',
-                        allowModifyOutput: snapshot.allowModifyOutput
+                        nodeId: snapshot.lastNodeId,
+                        nodeName: snapshot.stateData?.current_node_name || '未知节点',
+                        checkMessage: snapshot.stateData?.check_message || '请审核此内容',
+                        allowModifyOutput: true
                     });
-                    setPausedNodeId(snapshot.pausedNodeId);
-                    console.log('已恢复人工介入状态:', snapshot.pausedNodeId);
+                    setPausedNodeId(snapshot.lastNodeId);
+                    console.log('已恢复人工介入状态:', snapshot.lastNodeId);
                 }
             } catch (snapshotError: any) {
                 // 如果没有快照或加载失败，不影响主流程
@@ -352,7 +410,7 @@ const AgentChat: React.FC = () => {
 
             const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:8080';
 
-            const response = await fetch(`${API_BASE_URL}/client/agent/chat`, {
+            const response = await fetch(`${API_BASE_URL}/client/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -408,7 +466,7 @@ const AgentChat: React.FC = () => {
             const token = localStorage.getItem('token');
             const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:8080';
 
-            const response = await fetch(`${API_BASE_URL}/client/agent/review`, {
+            const response = await fetch(`${API_BASE_URL}/client/chat/review`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -417,7 +475,8 @@ const AgentChat: React.FC = () => {
                 body: JSON.stringify({
                     conversationId: conversationIdRef.current,
                     nodeId: interventionState?.nodeId,
-                    approved: data.approved
+                    approved: data.approved,
+                    agentId: id  // 添加必填的agentId字段
                 })
             });
 
@@ -781,6 +840,7 @@ const AgentChat: React.FC = () => {
                                                 interventionState?.conversationId === conversationId && (
                                                     <div style={{ maxWidth: '80%', marginTop: 8 }}>
                                                         <HumanInterventionReview
+                                                            agentId={id!}
                                                             conversationId={conversationId}
                                                             nodeId={interventionState.nodeId!}
                                                             nodeName={interventionState.nodeName!}
