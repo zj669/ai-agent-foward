@@ -19,12 +19,29 @@ type LoginFormByType = z.infer<typeof loginSchema>;
 const Login: React.FC = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
+    const [rememberMe, setRememberMe] = useState(false);
     const [sloganText, setSloganText] = useState('');
     const fullSlogan = "构建下一代智能体工作流";
 
-    const { control, handleSubmit, formState: { errors } } = useForm<LoginFormByType>({
+    const { control, handleSubmit, setValue, formState: { errors } } = useForm<LoginFormByType>({
         resolver: zodResolver(loginSchema),
     });
+
+    // Check for saved credentials
+    useEffect(() => {
+        const savedCreds = localStorage.getItem('login_credentials');
+        if (savedCreds) {
+            try {
+                const { email, password } = JSON.parse(atob(savedCreds));
+                setValue('email', email);
+                setValue('password', password);
+                setRememberMe(true);
+            } catch (e) {
+                console.error('Failed to parse saved credentials', e);
+                localStorage.removeItem('login_credentials');
+            }
+        }
+    }, [setValue]);
 
     // Slogan typing effect
     useEffect(() => {
@@ -49,6 +66,15 @@ const Login: React.FC = () => {
 
             if (res && res.token) {
                 localStorage.setItem('token', res.token);
+
+                // Handle Remember Me
+                if (rememberMe) {
+                    const creds = btoa(JSON.stringify({ email: data.email, password: data.password }));
+                    localStorage.setItem('login_credentials', creds);
+                } else {
+                    localStorage.removeItem('login_credentials');
+                }
+
                 message.success('登录成功');
                 navigate('/dashboard');
             } else {
@@ -197,7 +223,12 @@ const Login: React.FC = () => {
 
                         <div className="flex items-center justify-between mb-6 text-sm">
                             <label className="flex items-center gap-2 cursor-pointer text-slate-400 hover:text-slate-300">
-                                <input type="checkbox" className="rounded border-slate-600 bg-transparent text-indigo-500 focus:ring-indigo-500 focus:ring-offset-slate-900" />
+                                <input
+                                    type="checkbox"
+                                    checked={rememberMe}
+                                    onChange={(e) => setRememberMe(e.target.checked)}
+                                    className="rounded border-slate-600 bg-transparent text-indigo-500 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                                />
                                 <span>记住我</span>
                             </label>
                             <a href="#" className="font-medium text-indigo-400 hover:text-indigo-300">忘记密码？</a>

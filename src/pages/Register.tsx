@@ -71,14 +71,37 @@ const Register: React.FC = () => {
     const onSubmit = async (data: RegisterFormType) => {
         setLoading(true);
         try {
+            // 1. 注册
             await request.post('/client/user/email/register', {
                 email: data.email,
                 code: data.code,
                 password: data.password
             });
 
-            message.success('注册成功，请登录');
-            navigate('/login');
+            message.success('注册成功，正在自动登录...');
+
+            // 2. 自动登录
+            try {
+                const res: any = await request.post('/client/user/login', {
+                    email: data.email,
+                    password: data.password
+                });
+
+                if (res && res.token) {
+                    localStorage.setItem('token', res.token);
+                    message.success('登录成功');
+                    navigate('/dashboard');
+                } else {
+                    // 登录失败但注册成功
+                    message.warning('自动登录失败，请手动登录');
+                    navigate('/login');
+                }
+            } catch (loginError) {
+                console.error('Auto login failed:', loginError);
+                message.warning('自动登录失败，请手动登录');
+                navigate('/login');
+            }
+
         } catch (error: any) {
             console.error(error);
             message.error(error.message || '注册失败');
