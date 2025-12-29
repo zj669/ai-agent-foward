@@ -65,15 +65,20 @@ const AgentChat: React.FC = () => {
     // Load Data
     useEffect(() => {
         console.log('AgentChat mounted, id:', id);
-        fetchAgentList();
-        if (id) {
-            console.log('Fetching agent info and history for id:', id);
-            fetchAgentInfo(id);
-            loadConversationHistory(id);
-        } else {
-            console.log('No agent id found in params');
+
+        // 防御性检查：如果 id 无效，重定向到 Dashboard
+        if (!id || id === 'undefined') {
+            console.warn('Invalid agent ID, redirecting to dashboard');
+            message.error('无效的 Agent ID');
+            navigate('/dashboard');
+            return;
         }
-    }, [id]);
+
+        fetchAgentList();
+        console.log('Fetching agent info and history for id:', id);
+        fetchAgentInfo(id);
+        loadConversationHistory(id);
+    }, [id, navigate]);
 
     const fetchAgentList = async () => {
         try {
@@ -748,18 +753,9 @@ const AgentChat: React.FC = () => {
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center shadow-paper shrink-0 border border-border">
                             <RobotOutlined className="text-accent text-lg" />
                         </div>
-                        <Select
-                            value={id}
-                            onChange={(value) => navigate(`/agent/chat/${value}`)}
-                            className="flex-1 font-bold text-lg agent-select-dropdown"
-                            style={{ width: 0 }} // Flex trick to allow shrinking
-                            bordered={false}
-                            dropdownStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                            options={agentList.map(agent => ({
-                                label: <span className="text-ink-900 font-medium">{agent.agentName}</span>,
-                                value: String(agent.id)
-                            }))}
-                        />
+                        <span className="flex-1 font-bold text-lg text-ink-900 truncate">
+                            {agentList.find(a => String(a.id) === id)?.agentName || agentName || id}
+                        </span>
                     </div>
                     <Button
                         type="primary"

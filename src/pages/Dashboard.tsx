@@ -120,8 +120,20 @@ const Dashboard: React.FC = () => {
     };
 
     const handleCreate = () => navigate('/agent/editor');
-    const handleEdit = (agentId: string) => navigate(`/agent/editor/${agentId}`);
-    const handleChat = (agentId: string) => navigate(`/agent/chat/${agentId}`);
+    const handleEdit = (agentId: string) => {
+        if (!agentId || agentId === 'undefined') {
+            message.error('无效的 Agent ID');
+            return;
+        }
+        navigate(`/agent/editor/${agentId}`);
+    };
+    const handleChat = (agentId: string) => {
+        if (!agentId || agentId === 'undefined') {
+            message.error('无效的 Agent ID');
+            return;
+        }
+        navigate(`/agent/chat/${agentId}`);
+    };
 
     const handlePublish = async (agentId: string, agentName: string) => {
         Modal.confirm({
