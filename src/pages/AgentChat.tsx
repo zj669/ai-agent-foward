@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Input, List, Avatar, Spin, message, Card, Layout, Typography, Tooltip, Empty, Collapse, Drawer, Grid } from 'antd';
+import { Button, Input, List, Avatar, Spin, message, Card, Layout, Typography, Tooltip, Empty, Collapse, Drawer, Grid, Select } from 'antd';
 import {
     UserOutlined, RobotOutlined, MessageOutlined, PlusOutlined, DeleteOutlined,
     StopOutlined, SendOutlined, ArrowLeftOutlined, FunctionOutlined, MenuUnfoldOutlined, MenuFoldOutlined
@@ -10,7 +10,8 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 // @ts-ignore
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { getNewConversationId, getChatHistory, getAgentDetail, getConversationIds, getContextSnapshot } from '../api/agent';
+import { getNewConversationId, getChatHistory, getAgentDetail, getConversationIds, getContextSnapshot, getAgentList } from '../api/agent';
+import { AiAgent } from '@/types';
 import '../styles/chat.css'; // Import custom styles
 import MessageBubble from '../components/chat/MessageBubble';
 import EmptyState from '../components/chat/EmptyState';
@@ -43,6 +44,7 @@ const AgentChat: React.FC = () => {
     const [conversationId, setConversationId] = useState<string>('');
     const [conversations, setConversations] = useState<ConversationItem[]>([]);
     const [interventionState, setInterventionState] = useState<HumanInterventionState | null>(null);
+    const [agentList, setAgentList] = useState<AiAgent[]>([]);
 
     // DAG Visualization State
     const [dagNodes, setDagNodes] = useState<DagNode[]>([]);
@@ -63,6 +65,7 @@ const AgentChat: React.FC = () => {
     // Load Data
     useEffect(() => {
         console.log('AgentChat mounted, id:', id);
+        fetchAgentList();
         if (id) {
             console.log('Fetching agent info and history for id:', id);
             fetchAgentInfo(id);
@@ -71,6 +74,15 @@ const AgentChat: React.FC = () => {
             console.log('No agent id found in params');
         }
     }, [id]);
+
+    const fetchAgentList = async () => {
+        try {
+            const list = await getAgentList();
+            setAgentList(list);
+        } catch (error) {
+            console.error('Failed to fetch agent list', error);
+        }
+    };
 
     // Responsive Logic
     useEffect(() => {
@@ -128,9 +140,10 @@ const AgentChat: React.FC = () => {
     const loadConversationHistory = async (agentId: string) => {
         console.log('loadConversationHistory called for agentId:', agentId);
         try {
-            const list = await getConversationIds(agentId);
+            const res = await getConversationIds(agentId);
+            const list = Array.isArray(res) ? res : (res as any).data || [];
             console.log('getConversationIds returned list:', list);
-            setConversations(list.map(item => ({ conversationId: item })));
+            setConversations(list.map((item: string) => ({ conversationId: item })));
 
             // 自动选择第一个会话并加载历史消息
             if (list.length > 0 && !conversationId) {
@@ -140,7 +153,8 @@ const AgentChat: React.FC = () => {
 
                 // 加载第一个会话的历史消息
                 try {
-                    const history = await getChatHistory(agentId, firstConversationId);
+                    const res = await getChatHistory(agentId, firstConversationId);
+                    const history = Array.isArray(res) ? res : (res as any).data || [];
 
                     // 解析历史消息
                     const parseContent = (content: string) => {
@@ -722,34 +736,45 @@ const AgentChat: React.FC = () => {
 
 
     return (
-        <Layout className="h-screen bg-[#0B0F19] overflow-hidden">
+        <Layout className="h-screen bg-background overflow-hidden">
             {/* Sidebar - History */}
             <Sider
                 width={280}
-                className="chat-sidebar hidden md:block"
-                style={{ height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+                className="chat-sidebar hidden md:block border-r border-border"
+                style={{ height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', backgroundColor: '#F8FAFC' }}
             >
-                <div className="p-6 border-b border-white/5 flex flex-col gap-4">
-                    <div className="flex items-center gap-3 text-slate-100 font-bold text-xl px-2">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.3)]">
-                            <RobotOutlined className="text-white text-lg" />
+                <div className="p-6 border-b border-border flex flex-col gap-4">
+                    <div className="flex items-center gap-3 text-ink-900 font-bold text-xl px-2">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center shadow-paper shrink-0 border border-border">
+                            <RobotOutlined className="text-accent text-lg" />
                         </div>
-                        <span className="truncate tracking-wide">{agentName}</span>
+                        <Select
+                            value={id}
+                            onChange={(value) => navigate(`/agent/chat/${value}`)}
+                            className="flex-1 font-bold text-lg agent-select-dropdown"
+                            style={{ width: 0 }} // Flex trick to allow shrinking
+                            bordered={false}
+                            dropdownStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            options={agentList.map(agent => ({
+                                label: <span className="text-ink-900 font-medium">{agent.agentName}</span>,
+                                value: String(agent.id)
+                            }))}
+                        />
                     </div>
                     <Button
                         type="primary"
                         block
                         icon={<PlusOutlined />}
                         onClick={startNewChat}
-                        className="rounded-xl h-11 bg-white/10 border-none hover:bg-white/20 text-white shadow-none backdrop-blur-sm transition-all"
+                        className="rounded-xl h-11 bg-white border border-border hover:border-accent text-ink-700 shadow-sm transition-all hover:bg-slate-50"
                     >
                         新对话
                     </Button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-3 scrollbar-thin">
-                    <div className="text-xs text-slate-400 mb-3 px-3 uppercase tracking-wider font-semibold">历史记录</div>
+                    <div className="text-xs text-ink-400 mb-3 px-3 uppercase tracking-wider font-semibold">历史记录</div>
                     {conversations.length === 0 ? (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="text-gray-500">暂无历史对话</span>} className="mt-10 opacity-50" />
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="text-ink-400">暂无历史对话</span>} className="mt-10 opacity-50" />
                     ) : (
                         <div className="flex flex-col gap-1.5">
                             {conversations.map(c => (
@@ -761,38 +786,38 @@ const AgentChat: React.FC = () => {
                                         ${conversationId === c.conversationId ? 'active' : ''}
                                     `}
                                 >
-                                    <MessageOutlined className={conversationId === c.conversationId ? 'text-indigo-400' : ''} />
+                                    <MessageOutlined className={conversationId === c.conversationId ? 'text-accent' : 'text-ink-400'} />
                                     <div className="truncate flex-1 font-mono text-xs">{c.conversationId}</div>
                                 </div>
                             ))}
                         </div>
                     )}
                 </div>
-                <div className="p-4 border-t border-white/5 bg-transparent">
-                    <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/dashboard')} block type="text" className="text-slate-400 hover:text-white h-10 hover:bg-white/5">
+                <div className="p-4 border-t border-border bg-transparent">
+                    <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/dashboard')} block type="text" className="text-ink-400 hover:text-ink-900 h-10 hover:bg-slate-100">
                         返回仪表盘
                     </Button>
                 </div>
             </Sider>
 
             {/* Split Screen Layout */}
-            <Layout className="flex-1 h-full relative">
+            <Layout className="flex-1 h-full relative bg-background">
                 {/* Header */}
-                <div className="h-16 flex items-center justify-between px-6 bg-slate-950/80 backdrop-blur-md shrink-0 z-10 sticky top-0 border-b border-slate-800">
-                    <div className="font-semibold text-slate-200 flex items-center gap-3">
+                <div className="h-16 flex items-center justify-between px-6 bg-background/80 backdrop-blur-md shrink-0 z-10 sticky top-0 border-b border-border">
+                    <div className="font-semibold text-ink-900 flex items-center gap-3">
                         {/* 移动端返回按钮 - 仅在侧边栏隐藏时显示 */}
                         <Tooltip title="返回仪表盘" className="md:hidden">
                             <Button
                                 type="text"
                                 icon={<ArrowLeftOutlined />}
                                 onClick={() => navigate('/dashboard')}
-                                className="md:hidden text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+                                className="md:hidden text-ink-400 hover:text-ink-900 hover:bg-slate-100 transition-all"
                             />
                         </Tooltip>
-                        <div className={`w-2.5 h-2.5 rounded-full ${conversationId ? 'bg-emerald-500 shadow-glow animate-pulse' : 'bg-slate-600'}`} />
+                        <div className={`w-2.5 h-2.5 rounded-full ${conversationId ? 'bg-emerald-500 shadow-glow animate-pulse' : 'bg-slate-300'}`} />
                         <div>
-                            <div className="text-sm font-bold text-slate-100">{conversationId ? `SESSION: ${conversationId}` : 'New Session'}</div>
-                            <div className="text-xs text-slate-400 font-normal">
+                            <div className="text-sm font-bold text-ink-900">{conversationId ? `SESSION: ${conversationId}` : 'New Session'}</div>
+                            <div className="text-xs text-ink-400 font-normal">
                                 {loading ? 'Agent is thinking...' : 'Waiting for input'}
                             </div>
                         </div>
@@ -822,8 +847,8 @@ const AgentChat: React.FC = () => {
                 </div>
 
                 <div className="flex-1 flex overflow-hidden">
-                    {/* Left Panel: Chat Area */}
-                    <div className="flex-1 flex flex-col min-w-0 bg-[#111827] transition-all duration-300 relative z-10">
+                    {/* Left Panel: Chat Area - CENTER PAPER */}
+                    <div className="flex-1 flex flex-col min-w-0 bg-paper transition-all duration-300 relative z-10 shadow-paper mx-0 md:mx-4 md:my-4 rounded-xl border border-border">
                         {/* Messages */}
                         <div className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth custom-scrollbar">
                             <div className="max-w-3xl mx-auto flex flex-col gap-8 pb-4">
@@ -863,7 +888,7 @@ const AgentChat: React.FC = () => {
                         </div>
 
                         {/* Input Area */}
-                        <div className="p-6 bg-gradient-to-t from-[#111827] via-[#111827] to-transparent shrink-0">
+                        <div className="p-6 bg-white shrink-0 border-t border-slate-100 rounded-b-xl">
                             <div className="max-w-3xl mx-auto relative chat-input-container">
                                 <Input.TextArea
                                     value={input}
@@ -876,7 +901,7 @@ const AgentChat: React.FC = () => {
                                     }}
                                     autoSize={{ minRows: 1, maxRows: 6 }}
                                     placeholder="输入消息以开始对话..."
-                                    className="!pr-24 !py-3 !px-4 !bg-black/20 !border !border-white/10 !text-slate-200 !text-base resize-none !shadow-sm focus:!shadow-md focus:!border-indigo-500/50 transition-all rounded-2xl placeholder:!text-slate-500"
+                                    className="!pr-24 !py-3 !px-4 !bg-transparent !border !border-border !text-ink-900 !text-base resize-none !shadow-none focus:!border-accent focus:!shadow-sm transition-all rounded-2xl placeholder:!text-ink-400"
                                 />
                                 <div className="absolute bottom-2.5 right-2.5 flex gap-2">
                                     {loading && !interventionState?.isPaused ? (
@@ -910,9 +935,10 @@ const AgentChat: React.FC = () => {
                     </div>
 
                     {/* Right Panel: DAG Visualization (Desktop) */}
+                    {/* Right Panel: DAG Visualization (Desktop) - ENGINEERING BLUEPRINT */}
                     {isDagPanelVisible && (
                         <div
-                            className="width-[40%] min-w-[400px] border-l border-gray-200 bg-slate-900 transition-all duration-300 ease-in-out relative flex flex-col"
+                            className="width-[40%] min-w-[400px] border-l border-border bg-background transition-all duration-300 ease-in-out relative flex flex-col"
                             style={{ flexBasis: '40%' }}
                         >
                             <div className="h-full w-full">
@@ -947,7 +973,7 @@ const AgentChat: React.FC = () => {
                 width="85%"
                 styles={{ body: { padding: 0, overflow: 'hidden' } }}
             >
-                <div className="h-full bg-slate-900">
+                <div className="h-full bg-background">
                     <DagVisualizationPanel
                         nodes={dagNodes}
                         edges={dagEdges}

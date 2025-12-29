@@ -16,53 +16,54 @@ interface ExecutionNodeProps {
 const ExecutionNode: React.FC<ExecutionNodeProps> = ({ data }) => {
     const { label, nodeType, status = 'pending' } = data;
 
-    const getStatusColor = () => {
+    const getStatusStyles = () => {
         switch (status) {
-            case 'running': return 'border-blue-500 text-blue-400 node-glow-running';
-            case 'completed': return 'border-emerald-500 text-emerald-400 node-glow-success';
-            case 'error': return 'border-red-500 text-red-400';
-            case 'paused': return 'border-amber-500 text-amber-400';
-            default: return 'border-gray-700 text-gray-500';
+            case 'running': return { border: 'border-blue-500', strip: 'bg-blue-500', glow: 'node-glow-running', text: 'text-blue-600', iconBg: 'bg-blue-50' };
+            case 'completed': return { border: 'border-emerald-500', strip: 'bg-emerald-500', glow: 'node-glow-success', text: 'text-emerald-600', iconBg: 'bg-emerald-50' };
+            case 'error': return { border: 'border-red-500', strip: 'bg-red-500', glow: 'node-glow-error', text: 'text-red-600', iconBg: 'bg-red-50' };
+            case 'paused': return { border: 'border-amber-500', strip: 'bg-amber-500', glow: '', text: 'text-amber-600', iconBg: 'bg-amber-50' };
+            default: return { border: 'border-slate-200', strip: 'bg-slate-200', glow: '', text: 'text-slate-500', iconBg: 'bg-slate-50' };
         }
     };
 
+    const s = getStatusStyles();
     const Icon = getIcon(nodeType);
 
     return (
         <div className={`
-            relative min-w-[180px] p-3 rounded-lg bg-[#111827]/90 backdrop-blur-md border transition-all duration-300
-            ${getStatusColor()}
+            relative min-w-[180px] rounded-lg bg-paper border transition-all duration-300 overflow-hidden
+            ${s.border} ${s.glow} shadow-paper
         `}>
-            {/* Handles */}
-            <Handle type="target" position={Position.Left} className="!bg-slate-500 !w-2 !h-2" />
-            <Handle type="source" position={Position.Right} className="!bg-indigo-500 !w-2 !h-2" />
+            {/* Color Strip */}
+            <div className={`absolute top-0 left-0 right-0 h-1 ${s.strip}`} />
 
-            <div className="flex items-center gap-3">
+            {/* Handles */}
+            <Handle type="target" position={Position.Left} className="!bg-slate-400 !w-2.5 !h-2.5 !border-2 !border-white" />
+            <Handle type="source" position={Position.Right} className="!bg-blue-500 !w-2.5 !h-2.5 !border-2 !border-white" />
+
+            <div className="flex items-center gap-3 p-3 pt-4">
                 {/* Icon */}
                 <div className={`
-                    w-8 h-8 rounded-lg flex items-center justify-center text-lg
-                    ${status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
-                        status === 'running' ? 'bg-indigo-500/20 text-indigo-400' :
-                            status === 'error' ? 'bg-red-500/20 text-red-400' :
-                                'bg-slate-700 text-slate-400'}
+                    w-9 h-9 rounded-lg flex items-center justify-center text-lg transition-colors
+                    ${s.iconBg} ${s.text}
                 `}>
                     {Icon}
                 </div>
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-slate-100 truncate">{label}</div>
-                    <div className="text-xs text-slate-400 truncate uppercase tracking-wider scale-90 origin-left">
+                    <div className="text-sm font-bold text-slate-800 truncate">{label}</div>
+                    <div className="text-xs text-slate-500 truncate uppercase tracking-wider scale-90 origin-left font-medium">
                         {nodeType.replace('_NODE', '')}
                     </div>
                 </div>
 
-                {/* Status Indicator */}
-                <div className="absolute -top-1.5 -right-1.5 bg-slate-800 rounded-full p-0.5 shadow-sm">
-                    {status === 'running' && <LoadingOutlined className="text-indigo-400 text-lg" spin />}
-                    {status === 'completed' && <CheckCircleFilled className="text-emerald-500 text-lg" />}
-                    {status === 'error' && <CloseCircleFilled className="text-red-500 text-lg" />}
-                    {status === 'paused' && <PauseCircleFilled className="text-amber-500 text-lg" />}
+                {/* Status Indicator (Optional, maybe redundant with strip/glow but good for accessibility) */}
+                <div className="absolute top-2 right-2">
+                    {status === 'running' && <LoadingOutlined className="text-blue-500 text-sm" spin />}
+                    {status === 'paused' && <PauseCircleFilled className="text-amber-500 text-sm" />}
+                    {status === 'error' && <CloseCircleFilled className="text-red-500 text-sm" />}
+                    {status === 'completed' && <CheckCircleFilled className="text-emerald-500 text-sm opacity-50" />}
                 </div>
             </div>
         </div>

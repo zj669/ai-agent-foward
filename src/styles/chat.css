@@ -1,73 +1,53 @@
 /* ========================================
-   AI Agent Chat - Deep Space Console
-   Concept: Iron Man HUD / Abyss & Blueprint
+   AI Agent Chat - Paper & Ink Theme
+   Concept: Clean, Minimalist, Engineering Blueprint
    ======================================== */
 
 :root {
-  /* Core Palette */
-  --bg-abyss: #0B0F19;
-  /* Global/Left Sidebar */
-  --bg-base: #111827;
-  /* Center/Right Workstation */
-  --glass-container: rgba(31, 41, 55, 0.6);
-
-  /* Text */
-  --text-main: #F3F4F6;
-  --text-sub: #9CA3AF;
-
-  /* Accents (Energy) */
-  --energy-blue: #3B82F6;
-  --energy-green: #10B981;
-  --energy-purple: #8b5cf6;
-  --energy-amber: #f59e0b;
-  --energy-red: #ef4444;
-
-  /* Borders & Glass */
-  --glass-border-light: rgba(255, 255, 255, 0.1);
-  --glass-bg-faint: rgba(255, 255, 255, 0.03);
+  /* No global vars needed, using Tailwind tokens */
 }
 
 /* ========================================
    Sidebar (The Archive)
    ======================================== */
 .chat-sidebar {
-  background: var(--bg-abyss) !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+  /* Colors handled by Tailwind classes in component */
 }
 
 .conversation-item {
-  color: var(--text-sub);
+  color: #64748b;
+  /* slate-500 */
   background: transparent;
   border-left: 2px solid transparent;
-  /* Glow line placeholder */
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease;
   padding: 10px 16px;
   position: relative;
 }
 
 .conversation-item:hover {
-  color: var(--text-main);
-  background: rgba(255, 255, 255, 0.02);
+  color: #0f172a;
+  /* slate-900 */
+  background: #f1f5f9;
+  /* slate-100 */
 }
 
 .conversation-item.active {
-  color: #fff;
-  background: linear-gradient(90deg, rgba(59, 130, 246, 0.1) 0%, transparent 100%);
-  border-left: 2px solid var(--energy-blue);
-  text-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+  color: #0f172a;
+  /* slate-900 */
+  background: #eff6ff;
+  /* blue-50 */
+  border-left: 3px solid #3b82f6;
+  /* blue-500 */
+  font-weight: 500;
 }
 
 /* ========================================
-   Chat Area (The Stream)
+   Chat Area
    ======================================== */
 
-/* Process Bubble (Glass Box) */
+/* Process Bubble (Glass Box -> Light Box) */
 .bubble-process {
-  background: rgba(255, 255, 255, 0.015);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  color: #9CA3AF;
+  /* Structural styles mainly */
   position: relative;
   overflow: hidden;
   transition: all 0.3s ease;
@@ -80,9 +60,10 @@
   left: 0;
   top: 0;
   bottom: 0;
-  width: 2px;
-  background: var(--energy-green);
-  box-shadow: 0 0 8px var(--energy-green);
+  width: 3px;
+  background: #3b82f6;
+  /* blue-500 */
+  box-shadow: 0 0 4px rgba(59, 130, 246, 0.4);
   animation: breatheHeight 2s infinite ease-in-out;
 }
 
@@ -98,83 +79,101 @@
   }
 }
 
-/* Result Bubble (Solid Presence) */
+/* Result Bubble - Managed via Tailwind now */
 .bubble-result {
-  background: linear-gradient(135deg, #1F2937 0%, #111827 100%);
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  border-radius: 12px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-  color: var(--text-main);
+  /* Minimal override if needed */
 }
 
 .bubble-user {
-  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
-  color: white;
-  border: none;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  /* Managed via Tailwind now */
 }
 
 /* Typography in Chat */
 .message-content {
-  font-family: 'Inter', sans-serif;
-  line-height: 1.6;
+  font-family: 'Inter', system-ui, sans-serif;
+  line-height: 1.7;
+  color: #0f172a;
+  /* slate-900 */
 }
 
 .message-content h1,
 .message-content h2,
 .message-content h3 {
-  color: var(--text-main);
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  color: #0f172a;
+  font-weight: 700;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  letter-spacing: -0.01em;
 }
 
+.message-content p {
+  margin-bottom: 0.75em;
+}
+
+.message-content ul,
+.message-content ol {
+  padding-left: 1.5em;
+  margin-bottom: 0.75em;
+}
+
+.message-content li {
+  margin-bottom: 0.25em;
+}
+
+/* Inline Code - Light Theme */
 .message-content code {
   font-family: 'JetBrains Mono', monospace;
-  background: rgba(0, 0, 0, 0.3);
-  padding: 2px 4px;
+  background: #f1f5f9;
+  /* slate-100 */
+  color: #db2777;
+  /* pink-600 */
+  padding: 2px 5px;
   border-radius: 4px;
-  color: #e5e7eb;
+  border: 1px solid #e2e8f0;
+  /* slate-200 */
+  font-size: 0.85em;
 }
 
+/* Block Code - Managed by SyntaxHighlighter but ensuring wrapper is nice */
 .message-content pre {
-  background: #0d1117;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 1em 0;
   border-radius: 8px;
+  overflow: hidden;
 }
 
 /* ========================================
    DAG Panel (Blueprint)
    ======================================== */
 .dag-blueprint-bg {
-  background-color: var(--bg-base);
-  background-image: radial-gradient(#374151 1px, transparent 1px);
+  background-color: #F8FAFC;
+  /* slate-50 */
+  background-image: radial-gradient(#CBD5E1 1.5px, transparent 1.5px);
+  /* slate-300 dots */
   background-size: 20px 20px;
 }
 
-/* Node Glow Effects */
+/* Node Glow Effects - Updated for Light Theme */
 .node-glow-running {
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+  /* blue glow */
+  border-color: #3b82f6 !important;
 }
 
 .node-glow-success {
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+  /* green glow */
+  border-color: #10b981 !important;
 }
 
-/* Input Area */
-.console-input {
-  background: rgba(17, 24, 39, 0.8) !important;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  color: var(--text-main) !important;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+.node-glow-error {
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+  /* red glow */
+  border-color: #ef4444 !important;
 }
 
-.console-input:focus-within {
-  border-color: var(--energy-blue) !important;
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3), 0 -4px 25px rgba(0, 0, 0, 0.3);
-}
-
-/* Scrollbar */
+/* ========================================
+   Scrollbar (Subtle Light)
+   ======================================== */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -185,10 +184,58 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(148, 163, 184, 0.4);
+  /* slate-400 */
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(148, 163, 184, 0.6);
+}
+
+/* ========================================
+   Agent Switcher Dropdown - Light Theme
+   ======================================== */
+.agent-select-dropdown .ant-select-selector {
+  background-color: transparent !important;
+  color: #0f172a !important;
+  /* slate-900 */
+  padding-left: 0 !important;
+}
+
+.agent-select-dropdown .ant-select-arrow {
+  color: #94a3b8;
+  /* slate-400 */
+}
+
+.agent-select-dropdown .ant-select-selection-item {
+  color: #0f172a !important;
+  /* slate-900 */
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+
+/* Dropdown Menu overrides */
+.ant-select-dropdown {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.ant-select-item {
+  color: #334155 !important;
+  /* slate-700 */
+}
+
+.ant-select-item-option-selected {
+  background-color: #eff6ff !important;
+  /* blue-50 */
+  color: #2563eb !important;
+  /* blue-600 */
+  font-weight: 500;
+}
+
+.ant-select-item-option-active {
+  background-color: #f8fafc !important;
+  /* slate-50 */
 }
