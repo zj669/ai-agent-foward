@@ -3,6 +3,29 @@
  * @description 用于人工介入审核时展示和编辑执行上下文
  */
 
+/** 人工介入信息 */
+export interface HumanInterventionInfo {
+    nodeId: string;
+    nodeName: string;
+    nodeType: string;
+    checkMessage: string;
+    allowModifyOutput: boolean;
+}
+
+/** 节点执行记录 */
+export interface NodeExecutionRecord {
+    nodeId: string;
+    nodeName: string;
+    nodeType: string;
+    status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'ERROR';
+    startTime: number;
+    endTime?: number;
+    duration?: number;
+    input?: any;
+    output?: any;
+    error?: string;
+}
+
 /** 聊天消息 */
 export interface SnapshotChatMessage {
     role: 'user' | 'assistant' | 'system';
@@ -21,8 +44,7 @@ export interface EditableFieldMeta {
 /** 执行上下文快照 (API v2) */
 export interface ExecutionContextSnapshot {
     // 基础信息
-    executionId: string;
-    conversationId?: string; // Compatible field
+    conversationId: string;  // 与后端 executionId 对应
     lastNodeId: string;
     timestamp: number;
     status: 'COMPLETED' | 'PAUSED' | 'RUNNING' | 'ERROR';
@@ -30,17 +52,25 @@ export interface ExecutionContextSnapshot {
     // 状态数据 (包含所有运行时数据)
     stateData: Record<string, any>;
 
-    // 兼容旧字段 (Optional) - 如果后端只返回 stateData，前端需设法适配
+    // 新增字段 (v2.0)
+    /** 人工介入信息 (仅当 status=PAUSED 时有值) */
+    humanIntervention?: HumanInterventionInfo;
+
+    /** 节点执行历史 (标准化格式) */
+    executionHistory?: NodeExecutionRecord[];
+
+    /** 后端驱动的可编辑字段描述 */
+    editableFields?: EditableFieldMeta[];
+
+    // 兼容旧字段 (Optional) - 逐步废弃
+    executionId?: string;  // 已废弃,使用 conversationId
     pausedNodeName?: string;
     pausedAt?: number;
     executedNodeIds?: string[];
 
-    // 审核相关
+    // 审核相关 (已迁移到 humanIntervention)
     checkMessage?: string;
     allowModifyOutput?: boolean;
-
-    // 后端驱动的可编辑字段描述 (如果后端还支持)
-    editableFields?: EditableFieldMeta[];
 }
 
 /** 快照修改请求 */

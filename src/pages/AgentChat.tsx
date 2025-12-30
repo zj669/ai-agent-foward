@@ -56,6 +56,8 @@ const AgentChat: React.FC = () => {
     const [isDagPanelVisible, setIsDagPanelVisible] = useState(true);
     // For smaller screens
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    // ⭐ 快照刷新触发器 - 工作流完成后更新这个key以触发快照重新加载
+    const [snapshotRefreshKey, setSnapshotRefreshKey] = useState(0);
 
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -181,16 +183,16 @@ const AgentChat: React.FC = () => {
                     // 尝试恢复人工介入状态
                     try {
                         const snapshot = await getContextSnapshot(agentId, firstConversationId);
-                        if (snapshot && snapshot.status === 'PAUSED') {
+                        if (snapshot && snapshot.status === 'PAUSED' && snapshot.humanIntervention) {
                             setInterventionState({
                                 isPaused: true,
                                 conversationId: firstConversationId,
-                                nodeId: snapshot.lastNodeId,
-                                nodeName: snapshot.stateData?.current_node_name || '未知节点',
-                                checkMessage: snapshot.stateData?.check_message || '请审核此内容',
-                                allowModifyOutput: true
+                                nodeId: snapshot.humanIntervention.nodeId,
+                                nodeName: snapshot.humanIntervention.nodeName,
+                                checkMessage: snapshot.humanIntervention.checkMessage,
+                                allowModifyOutput: snapshot.humanIntervention.allowModifyOutput
                             });
-                            setPausedNodeId(snapshot.lastNodeId);
+                            setPausedNodeId(snapshot.humanIntervention.nodeId);
                         }
                     } catch (snapshotError: any) {
                         console.log('未找到暂停状态或加载失败:', snapshotError.message);
@@ -307,18 +309,18 @@ const AgentChat: React.FC = () => {
                 const snapshot = await getContextSnapshot(id!, cid);
 
                 // 根据新的API结构判断是否处于暂停状态
-                if (snapshot && snapshot.status === 'PAUSED') {
+                if (snapshot && snapshot.status === 'PAUSED' && snapshot.humanIntervention) {
                     // 恢复人工介入状态
                     setInterventionState({
                         isPaused: true,
                         conversationId: cid,
-                        nodeId: snapshot.lastNodeId,
-                        nodeName: snapshot.stateData?.current_node_name || '未知节点',
-                        checkMessage: snapshot.stateData?.check_message || '请审核此内容',
-                        allowModifyOutput: true
+                        nodeId: snapshot.humanIntervention.nodeId,
+                        nodeName: snapshot.humanIntervention.nodeName,
+                        checkMessage: snapshot.humanIntervention.checkMessage,
+                        allowModifyOutput: snapshot.humanIntervention.allowModifyOutput
                     });
-                    setPausedNodeId(snapshot.lastNodeId);
-                    console.log('已恢复人工介入状态:', snapshot.lastNodeId);
+                    setPausedNodeId(snapshot.humanIntervention.nodeId);
+                    console.log('已恢复人工介入状态:', snapshot.humanIntervention.nodeId);
                 }
             } catch (snapshotError: any) {
                 // 如果没有快照或加载失败，不影响主流程
@@ -520,14 +522,18 @@ const AgentChat: React.FC = () => {
     const handleSSEEvent = (data: any) => {
         if (data.type === 'dag_start') {
             setMessages(prev => {
+                if (prev.length === 0) return prev;
                 const newMsgs = [...prev];
-                const currentMsg = newMsgs[newMsgs.length - 1];
-                if (currentMsg && currentMsg.role === 'assistant') {
+                const lastIndex = newMsgs.length - 1;
+                const currentMsg = { ...newMsgs[lastIndex] };
+
+                if (currentMsg.role === 'assistant') {
                     currentMsg.dagProgress = {
                         current: 0,
                         total: data.totalNodes || 0,
                         percentage: 0
                     };
+                    newMsgs[lastIndex] = currentMsg;
                 }
                 return newMsgs;
             });
@@ -549,19 +555,25 @@ const AgentChat: React.FC = () => {
 
         if (data.type === 'dag_complete') {
             setMessages(prev => {
+                if (prev.length === 0) return prev;
                 const newMsgs = [...prev];
-                const currentMsg = newMsgs[newMsgs.length - 1];
-                if (currentMsg && currentMsg.role === 'assistant') {
+                const lastIndex = newMsgs.length - 1;
+                const currentMsg = { ...newMsgs[lastIndex] };
+
+                if (currentMsg.role === 'assistant') {
                     currentMsg.loading = false;
                     if (data.status === 'failed') {
                         currentMsg.error = true;
                     }
+                    newMsgs[lastIndex] = currentMsg;
                 }
                 return newMsgs;
             });
 
             // 聊天结束后重置 DAG 状态
             resetDagState();
+            // ⭐ 刷新快照 - 工作流完成后快照可能有新数据
+            setSnapshotRefreshKey(prev => prev + 1);
             return;
         }
 
@@ -575,15 +587,21 @@ const AgentChat: React.FC = () => {
         }
 
         setMessages(prev => {
+            if (prev.length === 0) return prev;
             const newMsgs = [...prev];
-            const currentMsg = newMsgs[newMsgs.length - 1];
-            if (!currentMsg || currentMsg.role !== 'assistant') return prev;
+            const lastIndex = newMsgs.length - 1;
+            const currentMsg = { ...newMsgs[lastIndex] };
+
+            if (currentMsg.role !== 'assistant') return prev;
+
+            // Clone nodes array for safe mutation
+            currentMsg.nodes = currentMsg.nodes ? [...currentMsg.nodes] : [];
 
             if (data.type === 'node_lifecycle') {
                 if (data.status === 'starting') {
                     // Update Message State
-                    const existingNode = currentMsg.nodes.find(n => n.nodeId === data.nodeId);
-                    if (!existingNode) {
+                    const existingNodeIndex = currentMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
+                    if (existingNodeIndex === -1) {
                         currentMsg.nodes.push({
                             nodeId: data.nodeId,
                             nodeName: data.nodeName || '未知节点',
@@ -600,15 +618,20 @@ const AgentChat: React.FC = () => {
                     setPausedNodeId(null);
 
                 } else if (data.status === 'completed') {
-                    let node = currentMsg.nodes.find(n => n.nodeId === data.nodeId);
-                    if (!node && data.nodeName) {
-                        node = currentMsg.nodes.find(n => n.nodeName === data.nodeName && n.status === 'running');
+                    let nodeIndex = currentMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
+                    if (nodeIndex === -1 && data.nodeName) {
+                        nodeIndex = currentMsg.nodes.findIndex(n => n.nodeName === data.nodeName && n.status === 'running');
                     }
-                    if (node) {
-                        node.status = 'completed';
-                        node.duration = data.durationMs;
-                        node.result = data.result;
-                        node.progress = data.progress;
+
+                    if (nodeIndex !== -1) {
+                        const updatedNode = {
+                            ...currentMsg.nodes[nodeIndex],
+                            status: 'completed' as const,
+                            duration: data.durationMs,
+                            result: data.result,
+                            progress: data.progress
+                        };
+                        currentMsg.nodes[nodeIndex] = updatedNode;
                     }
 
                     if (data.progress && currentMsg.dagProgress) {
@@ -626,14 +649,19 @@ const AgentChat: React.FC = () => {
                     }
 
                 } else if (data.status === 'failed') {
-                    let node = currentMsg.nodes.find(n => n.nodeId === data.nodeId);
-                    if (!node && data.nodeName) {
-                        node = currentMsg.nodes.find(n => n.nodeName === data.nodeName && n.status === 'running');
+                    let nodeIndex = currentMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
+                    if (nodeIndex === -1 && data.nodeName) {
+                        nodeIndex = currentMsg.nodes.findIndex(n => n.nodeName === data.nodeName && n.status === 'running');
                     }
-                    if (node) {
-                        node.status = 'error';
-                        node.duration = data.durationMs;
-                        node.result = data.result;
+
+                    if (nodeIndex !== -1) {
+                        const updatedNode = {
+                            ...currentMsg.nodes[nodeIndex],
+                            status: 'error' as const,
+                            duration: data.durationMs,
+                            result: data.result
+                        };
+                        currentMsg.nodes[nodeIndex] = updatedNode;
                     }
 
                     // Update DAG Vis State
@@ -641,24 +669,37 @@ const AgentChat: React.FC = () => {
                     setActiveNodeId(null);
                 }
             } else if (data.type === 'node_execute') {
-                let node = currentMsg.nodes.find(n => n.nodeName === data.nodeName && n.status === 'running');
-                if (!node && data.nodeName) {
+                // Try to find by ID first
+                let nodeIndex = data.nodeId
+                    ? currentMsg.nodes.findIndex(n => n.nodeId === data.nodeId)
+                    : -1;
+
+                // Fallback to finding by name if running
+                if (nodeIndex === -1 && data.nodeName) {
+                    nodeIndex = currentMsg.nodes.findIndex(n => n.nodeName === data.nodeName && n.status === 'running');
+                }
+
+                if (nodeIndex === -1 && data.nodeName) {
                     // Auto-create implied node if missing
-                    node = {
-                        nodeId: `implied_${Date.now()}`,
+                    const newNode = {
+                        nodeId: data.nodeId || `implied_${Date.now()}`,
                         nodeName: data.nodeName,
-                        status: 'running',
+                        status: 'running' as const,
                         content: '',
                         startTime: Date.now()
                     };
-                    currentMsg.nodes.push(node);
+                    currentMsg.nodes.push(newNode);
+                    nodeIndex = currentMsg.nodes.length - 1;
+
                     // Also try to find it in DAG to highlight
                     const dagNode = dagNodes.find(n => n.data.label === data.nodeName);
                     if (dagNode) setActiveNodeId(dagNode.id);
                 }
 
-                if (node) {
-                    node.content += (data.content || '');
+                if (nodeIndex !== -1) {
+                    const updatedNode = { ...currentMsg.nodes[nodeIndex] };
+                    updatedNode.content = (updatedNode.content || '') + (data.content || '');
+                    currentMsg.nodes[nodeIndex] = updatedNode;
                 }
             } else if (data.type === 'error') {
                 currentMsg.error = true;
@@ -673,20 +714,25 @@ const AgentChat: React.FC = () => {
                 currentMsg.nodes.push(errorNode);
             } else if (data.type === 'token' || data.type === 'answer') {
                 // Final response logic
-                let finalNode = currentMsg.nodes.find(n => n.nodeName === '最终回复');
-                if (!finalNode) {
-                    finalNode = {
+                let finalNodeIndex = currentMsg.nodes.findIndex(n => n.nodeName === '最终回复');
+                if (finalNodeIndex === -1) {
+                    const finalNode = {
                         nodeId: 'final_response',
                         nodeName: '最终回复',
-                        status: 'running',
+                        status: 'running' as const,
                         content: '',
                         startTime: Date.now()
                     };
                     currentMsg.nodes.push(finalNode);
+                    finalNodeIndex = currentMsg.nodes.length - 1;
                 }
-                finalNode.content += (data.content || '');
+
+                const updatedFinalNode = { ...currentMsg.nodes[finalNodeIndex] };
+                updatedFinalNode.content = (updatedFinalNode.content || '') + (data.content || '');
+                currentMsg.nodes[finalNodeIndex] = updatedFinalNode;
             }
 
+            newMsgs[lastIndex] = currentMsg;
             return newMsgs;
         });
     };
@@ -726,12 +772,19 @@ const AgentChat: React.FC = () => {
         setLoading(false);
         setMessages(prev => {
             const newMsgs = [...prev];
-            const lastMsg = newMsgs[newMsgs.length - 1];
-            if (lastMsg && lastMsg.loading) {
-                lastMsg.loading = false;
-                lastMsg.nodes.forEach(n => {
-                    if (n.status === 'running') n.status = 'error';
-                });
+            const lastIndex = newMsgs.length - 1;
+            if (lastIndex >= 0) {
+                const lastMsg = { ...newMsgs[lastIndex] };
+                if (lastMsg.loading) {
+                    lastMsg.loading = false;
+                    lastMsg.nodes = lastMsg.nodes ? lastMsg.nodes.map(n => {
+                        if (n.status === 'running') {
+                            return { ...n, status: 'error' as const };
+                        }
+                        return n;
+                    }) : [];
+                    newMsgs[lastIndex] = lastMsg;
+                }
             }
             return newMsgs;
         });
@@ -866,6 +919,7 @@ const AgentChat: React.FC = () => {
                                                             nodeId={interventionState.nodeId!}
                                                             nodeName={interventionState.nodeName!}
                                                             checkMessage={interventionState.checkMessage!}
+                                                            refreshKey={snapshotRefreshKey}
                                                             onReview={handleReviewSubmit}
                                                         />
                                                     </div>

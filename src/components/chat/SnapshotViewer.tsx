@@ -12,10 +12,11 @@ import dayjs from 'dayjs';
 interface SnapshotViewerProps {
     agentId: string;            // 新增: 需要agentId
     conversationId: string;
+    refreshKey?: number;        // ⭐ 新增: 外部触发刷新的key
     onSnapshotLoaded?: (snapshot: ExecutionContextSnapshot) => void;
 }
 
-const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ agentId, conversationId, onSnapshotLoaded }) => {
+const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ agentId, conversationId, refreshKey, onSnapshotLoaded }) => {
     const [snapshot, setSnapshot] = useState<ExecutionContextSnapshot | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -42,7 +43,7 @@ const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ agentId, conversationId
         if (agentId && conversationId) {
             loadSnapshot();
         }
-    }, [agentId, conversationId]);
+    }, [agentId, conversationId, refreshKey]); // ⭐ 添加 refreshKey 依赖
 
     const handleFieldChange = (field: string, value: any) => {
         setModifications(prev => ({ ...prev, [field]: value }));
@@ -56,11 +57,10 @@ const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ agentId, conversationId
         }
         setSaving(true);
         try {
-            // 根据新的API结构构建 payload
             await updateContextSnapshot(
                 agentId,
                 conversationId,
-                snapshot.lastNodeId, // 使用最后的节点ID
+                snapshot?.lastNodeId, // 使用最后的节点ID
                 modifications        // 直接传递 stateData
             );
             message.success('快照已更新');
@@ -164,7 +164,9 @@ const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ agentId, conversationId
                 <Space>
                     <EyeOutlined style={{ color: '#1677ff' }} />
                     <Typography.Text strong>执行上下文快照</Typography.Text>
-                    {snapshot.pausedNodeName ? (
+                    {snapshot.status === 'PAUSED' && snapshot.humanIntervention ? (
+                        <Tag color="orange">暂停节点: {snapshot.humanIntervention.nodeName}</Tag>
+                    ) : snapshot.pausedNodeName ? (
                         <Tag color="orange">暂停节点: {snapshot.pausedNodeName}</Tag>
                     ) : (
                         <Tag color={snapshot.status === 'COMPLETED' ? 'green' : 'blue'}>{snapshot.status}</Tag>
@@ -200,8 +202,11 @@ const SnapshotViewer: React.FC<SnapshotViewerProps> = ({ agentId, conversationId
             {/* Read-only Info Header */}
             <div style={{ padding: '12px 0', borderBottom: '1px solid #f0f0f0', marginBottom: 12, color: '#888', fontSize: 12 }}>
                 <Space split="|">
-                    <span>快照时间: {dayjs(snapshot.timestamp || (snapshot as any).pausedAt).format('YYYY-MM-DD HH:mm:ss')}</span>
-                    <span>最后节点: {snapshot.lastNodeId || (snapshot as any).pausedNodeId || '-'}</span>
+                    <span>快照时间: {dayjs(snapshot.timestamp).format('YYYY-MM-DD HH:mm:ss')}</span>
+                    <span>最后节点: {snapshot.humanIntervention?.nodeName || snapshot.lastNodeId || '-'}</span>
+                    {snapshot.humanIntervention && (
+                        <span>节点类型: {snapshot.humanIntervention.nodeType}</span>
+                    )}
                 </Space>
             </div>
 
