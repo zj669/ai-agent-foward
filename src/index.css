@@ -10,10 +10,36 @@ body {
   min-height: 100vh;
 }
 
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 @keyframes pop-in {
   from {
     opacity: 0;
-    transform: scale(0.9);
+    transform: scale(0.95);
   }
 
   to {
@@ -23,5 +49,5 @@ body {
 }
 
 .animate-pop-in {
-  animation: pop-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: pop-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

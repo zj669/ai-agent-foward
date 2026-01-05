@@ -2,16 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { getConfigSchema } from '@/api/config';
 import { Form, Input, Select, InputNumber, Checkbox, Switch, Button, Spin, Empty, Divider, message, Radio, Tooltip, Modal } from 'antd';
-import { InfoCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import { InfoCircleOutlined, DeleteOutlined, CloseOutlined, SettingOutlined, NodeIndexOutlined } from '@ant-design/icons';
 
 // Type definitions for config fields
 interface FieldDef {
     fieldName: string;
     fieldLabel: string;
-    fieldType: string; // text, number, select, textarea, boolean, password
+    fieldType: string;
     required: boolean;
     defaultValue?: any;
-    options?: string[]; // for select
+    options?: string[];
     description?: string;
 }
 
@@ -36,7 +36,7 @@ const renderField = (field: FieldDef) => {
         case 'boolean':
             return <Switch />;
         case 'textarea':
-            return <Input.TextArea rows={4} />;
+            return <Input.TextArea rows={4} className="rounded-lg" />;
         case 'password':
             return <Input.Password />;
         default:
@@ -53,52 +53,36 @@ const ModelConfig: React.FC<ModelConfigProps> = ({ configDef, fieldDefs }) => {
     const form = Form.useFormInstance();
     const modelSource = Form.useWatch(['MODEL', 'modelSource'], form);
 
-    // Filter fields based on mode
     const customFields = ['baseUrl', 'apiKey', 'modelName'];
     const commonFields = fieldDefs.filter(f => !customFields.includes(f.fieldName));
 
-    // State to store previous modelId for restoration
     const [prevModelId, setPrevModelId] = React.useState<string | undefined>(undefined);
 
     const handleModeChange = (e: any) => {
         const newSource = e.target.value;
         const currentModelId = form.getFieldValue(['MODEL', 'modelId']);
-
-        // Update modelSource field in form
         form.setFieldValue(['MODEL', 'modelSource'], newSource);
-
         if (newSource === 'platform') {
-            // Restore previous modelId if available
-            if (prevModelId) {
-                form.setFieldValue(['MODEL', 'modelId'], prevModelId);
-            }
-            // Clear custom fields when switching to system model
+            if (prevModelId) form.setFieldValue(['MODEL', 'modelId'], prevModelId);
             form.setFieldValue(['MODEL', 'apiKey'], undefined);
             form.setFieldValue(['MODEL', 'baseUrl'], undefined);
             form.setFieldValue(['MODEL', 'modelName'], undefined);
         } else {
-            // Store current modelId before clearing
-            if (currentModelId) {
-                setPrevModelId(currentModelId);
-            }
-            // Clear modelId when switching to custom
+            if (currentModelId) setPrevModelId(currentModelId);
             form.setFieldValue(['MODEL', 'modelId'], undefined);
         }
     };
 
     return (
         <div className="mb-4">
-            <Form.Item label="模型来源">
-                <Radio.Group value={modelSource} onChange={handleModeChange} optionType="button" buttonStyle="solid">
-                    <Radio.Button value="platform">系统预置</Radio.Button>
-                    <Radio.Button value="custom">自定义</Radio.Button>
+            <Form.Item label="模型来源" className="mb-4">
+                <Radio.Group value={modelSource} onChange={handleModeChange} optionType="button" buttonStyle="solid" className="w-full flex">
+                    <Radio.Button value="platform" className="flex-1 text-center">系统预置</Radio.Button>
+                    <Radio.Button value="custom" className="flex-1 text-center">自定义</Radio.Button>
                 </Radio.Group>
             </Form.Item>
 
-            {/* Hidden field to store modelSource */}
-            <Form.Item name={['MODEL', 'modelSource']} hidden>
-                <Input />
-            </Form.Item>
+            <Form.Item name={['MODEL', 'modelSource']} hidden><Input /></Form.Item>
 
             {modelSource === 'platform' && (
                 <Form.Item
@@ -106,10 +90,10 @@ const ModelConfig: React.FC<ModelConfigProps> = ({ configDef, fieldDefs }) => {
                     label="选择模型"
                     rules={[{ required: true, message: '请选择模型' }]}
                 >
-                    <Select placeholder="请选择模型">
+                    <Select placeholder="请选择模型" className="w-full">
                         {configDef.options?.map(opt => (
                             <Select.Option key={opt.id} value={opt.id}>
-                                {opt.name} <span className="text-gray-400 text-xs">({opt.type})</span>
+                                {opt.name} <span className="text-slate-400 text-xs">({opt.type})</span>
                             </Select.Option>
                         ))}
                     </Select>
@@ -117,8 +101,8 @@ const ModelConfig: React.FC<ModelConfigProps> = ({ configDef, fieldDefs }) => {
             )}
 
             {modelSource === 'custom' && (
-                <div className="bg-gray-50 p-3 rounded mb-4 border border-gray-100">
-                    <p className="text-xs text-gray-500 mb-2">请输入自定义模型的连接信息</p>
+                <div className="bg-slate-50 p-4 rounded-lg mb-4 border border-slate-100">
+                    <p className="text-xs text-slate-500 mb-3 font-medium">自定义模型连接信息</p>
                     {fieldDefs.filter(f => customFields.includes(f.fieldName)).map(field => (
                         <Form.Item
                             key={field.fieldName}
@@ -126,6 +110,7 @@ const ModelConfig: React.FC<ModelConfigProps> = ({ configDef, fieldDefs }) => {
                             label={field.fieldLabel}
                             rules={[{ required: field.required, message: '此项必填' }]}
                             tooltip={field.description}
+                            className="bg-white p-2 rounded border border-slate-100 mb-3"
                         >
                             {renderField(field)}
                         </Form.Item>
@@ -135,23 +120,14 @@ const ModelConfig: React.FC<ModelConfigProps> = ({ configDef, fieldDefs }) => {
 
             {commonFields.length > 0 && (
                 <>
-                    <Divider dashed style={{ margin: '12px 0' }} />
+                    <Divider dashed className="border-slate-200 my-4" />
                     <div className="px-1">
-                        <div className="text-xs font-bold text-gray-500 mb-3">参数配置</div>
+                        <div className="text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">参数配置</div>
                         {commonFields.map(field => (
                             <Form.Item
                                 key={field.fieldName}
                                 name={['MODEL', field.fieldName]}
-                                label={
-                                    <span>
-                                        {field.fieldLabel}
-                                        {field.description && (
-                                            <Tooltip title={field.description}>
-                                                <InfoCircleOutlined className="ml-1 text-gray-400" />
-                                            </Tooltip>
-                                        )}
-                                    </span>
-                                }
+                                label={<span>{field.fieldLabel}{field.description && <Tooltip title={field.description}><InfoCircleOutlined className="ml-1 text-slate-400" /></Tooltip>}</span>}
                                 valuePropName={field.fieldType === 'boolean' || field.fieldType === 'checkbox' ? 'checked' : 'value'}
                             >
                                 {renderField(field)}
@@ -164,8 +140,6 @@ const ModelConfig: React.FC<ModelConfigProps> = ({ configDef, fieldDefs }) => {
     );
 };
 
-
-// Helper to determine ID field name based on config type
 const getIdFieldName = (configType: string): string => {
     switch (configType) {
         case 'MODEL': return 'modelId';
@@ -176,21 +150,13 @@ const getIdFieldName = (configType: string): string => {
     }
 };
 
-// Global cache to store config definitions
-const configCache: {
-    defs: Record<string, ConfigDef>;
-    fields: Record<string, FieldDef[]>;
-} = {
-    defs: {},
-    fields: {}
-};
+const configCache: { defs: Record<string, ConfigDef>; fields: Record<string, FieldDef[]>; } = { defs: {}, fields: {} };
 
 interface ConfigPanelProps {
     onClose?: () => void;
-    onHeaderMouseDown?: (e: React.MouseEvent) => void;
 }
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown }) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose }) => {
     const { nodes, edges, selectedNodeId, selectedEdgeId, updateNodeData, updateEdgeData, deleteNode, deleteEdge } = useAgentStore();
     const selectedNode = nodes.find(n => n.id === selectedNodeId);
     const selectedEdge = edges.find(e => e.id === selectedEdgeId);
@@ -200,100 +166,57 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
     const [configDefsMap, setConfigDefsMap] = useState<Record<string, ConfigDef>>({});
     const [form] = Form.useForm();
 
-    // Helper to process and clean initial values before form initialization
     const processInitialValues = (rawConfig: any) => {
         const config = JSON.parse(JSON.stringify(rawConfig || {}));
-
         if (config.MODEL) {
-            // Case 1: Has explicit modelSource
-            if (config.MODEL.modelSource) {
-                // If platform source, ensure sensitive fields are cleaned up
-                if (config.MODEL.modelSource === 'platform') {
-                    delete config.MODEL.apiKey;
-                    delete config.MODEL.baseUrl;
-                    delete config.MODEL.modelName;
-                }
-            }
-            // Case 2: No explicit source, infer from modelId (Migration/Compat)
-            else if (config.MODEL.modelId) {
+            if (config.MODEL.modelSource === 'platform') {
+                delete config.MODEL.apiKey; delete config.MODEL.baseUrl; delete config.MODEL.modelName;
+            } else if (config.MODEL.modelId) {
                 config.MODEL.modelSource = 'platform';
-                delete config.MODEL.apiKey;
-                delete config.MODEL.baseUrl;
-                delete config.MODEL.modelName;
-            }
-            // Case 3: Default to custom
-            else {
+                delete config.MODEL.apiKey; delete config.MODEL.baseUrl; delete config.MODEL.modelName;
+            } else {
                 config.MODEL.modelSource = 'custom';
             }
         }
         return config;
     };
 
-    // Load configs when selected node changes
     useEffect(() => {
         if (!selectedNode) return;
-
         let active = true;
 
         const load = async () => {
-            // Try to get supportedConfigs from data (passed from Sidebar -> FlowCanvas -> Node)
             let supportedConfigs = (selectedNode.data?.supportedConfigs as string[]) || [];
-
             if (!supportedConfigs.length) {
-                setFieldDefsMap({});
-                setConfigDefsMap({});
-                form.resetFields(); // Ensure form is clear
-                return;
+                setFieldDefsMap({}); setConfigDefsMap({}); form.resetFields(); return;
             }
 
-            // Check if we have all needed configs in cache
-            const missingConfigs = supportedConfigs.filter(
-                type => !configCache.defs[type] || !configCache.fields[type]
-            );
+            const missingConfigs = supportedConfigs.filter(type => !configCache.defs[type] || !configCache.fields[type]);
 
             if (missingConfigs.length > 0) {
                 setLoading(true);
                 try {
                     await Promise.all(missingConfigs.map(async (configType) => {
-                        // Try new Schema API first
                         try {
                             const res = await getConfigSchema(configType);
-                            // res is already unwrapped by request interceptor, should be the fields array directly
                             const schema = res;
-
-                            // Check if schema is an array of fields (new API format)
                             if (Array.isArray(schema) && schema.length > 0) {
-                                // Create a simple ConfigDef for this config type
                                 const configDef: ConfigDef = {
-                                    configType: configType,
-                                    configName: configType,
-                                    description: `${configType} 配置`,
-                                    options: []
+                                    configType: configType, configName: configType, description: `${configType} 配置`, options: []
                                 };
-
-                                // Map API fields to FieldDef
                                 const fieldDefs: FieldDef[] = schema.map((f: any) => ({
-                                    fieldName: f.fieldName,
-                                    fieldLabel: f.fieldLabel,
-                                    fieldType: f.fieldType,
-                                    required: f.required,
-                                    defaultValue: f.defaultValue,
+                                    fieldName: f.fieldName, fieldLabel: f.fieldLabel, fieldType: f.fieldType,
+                                    required: f.required, defaultValue: f.defaultValue,
                                     options: f.options ? (typeof f.options === 'string' ? JSON.parse(f.options) : f.options) : undefined,
                                     description: f.description
                                 }));
-
                                 configCache.defs[configType] = configDef;
                                 configCache.fields[configType] = fieldDefs;
-                                return;
                             }
-                        } catch (e) {
-                            console.error(`Failed to load config schema for ${configType}:`, e);
-                            // No fallback APIs available
-                        }
+                        } catch (e) { console.error(`Failed to load config schema for ${configType}:`, e); }
                     }));
                 } catch (e) {
-                    console.error(e);
-                    message.error('加载配置失败');
+                    console.error(e); message.error('加载配置失败');
                 } finally {
                     if (active) setLoading(false);
                 }
@@ -301,115 +224,82 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
 
             if (!active) return;
 
-            // Build maps from cache
             const fieldsMap: Record<string, FieldDef[]> = {};
             const configsMap: Record<string, ConfigDef> = {};
-
             for (const configType of supportedConfigs) {
                 if (configCache.defs[configType]) configsMap[configType] = configCache.defs[configType];
                 if (configCache.fields[configType]) fieldsMap[configType] = configCache.fields[configType];
             }
-
             setConfigDefsMap(configsMap);
             setFieldDefsMap(fieldsMap);
 
-            // Process and set form values
             const rawConfig = (selectedNode.data?.config as any) || {};
             const cleanConfig = processInitialValues(rawConfig);
-
-            // Reset fields before setting new values to ensure independence
             form.resetFields();
             form.setFieldsValue(cleanConfig);
         };
-
         load();
-
-        return () => {
-            active = false;
-        };
+        return () => { active = false; };
     }, [selectedNode?.id, selectedNode?.data?.supportedConfigs, form]);
 
     const handleValuesChange = (changedValues: any, allValues: any) => {
-        if (selectedNodeId) {
-            // allValues is already nested object { MODEL: { ... }, ... } due to form binding
-            updateNodeData(selectedNodeId, { config: allValues });
-        }
+        if (selectedNodeId) updateNodeData(selectedNodeId, { config: allValues });
     };
 
-    // Render Edge Config
     if (selectedEdge) {
         return (
-            <div className="h-full flex flex-col bg-white shadow-xl rounded-lg overflow-hidden border border-gray-200">
-                <div
-                    className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 cursor-move"
-                    onMouseDown={onHeaderMouseDown}
-                >
+            <div className="h-full flex flex-col bg-slate-50">
+                <div className="p-4 border-b border-slate-200 bg-white flex justify-between items-center shadow-sm z-10">
                     <div className="flex items-center gap-2">
-                        {onClose && (
-                            <Button
-                                type="text"
-                                icon={<span className="text-gray-400">⇤</span>}
-                                onClick={onClose}
-                                className="mr-1"
-                                size="small"
-                            />
-                        )}
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600">
+                            <NodeIndexOutlined />
+                        </div>
                         <div>
-                            <div className="font-bold text-gray-800">连接线配置</div>
-                            <div className="text-xs text-gray-400 font-mono mt-1">{selectedEdge.id}</div>
+                            <div className="font-bold text-slate-700">连接线</div>
+                            <div className="text-xs text-slate-400 font-mono">{selectedEdge.id}</div>
                         </div>
                     </div>
-                    <div className="tag px-2 py-0.5 bg-purple-100 text-purple-600 rounded text-xs font-semibold">
-                        EDGE
+                    {onClose && <Button type="text" icon={<CloseOutlined />} onClick={onClose} className="text-slate-400 hover:text-red-500" />}
+                </div>
+
+                <div className="p-4 flex-1 overflow-y-auto">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                        <Form layout="vertical">
+                            <Form.Item label="连接类型" className="mb-2 font-medium">
+                                <Select
+                                    value={selectedEdge.data?.edgeType || 'DEPENDENCY'}
+                                    onChange={(val) => updateEdgeData(selectedEdge.id, { edgeType: val })}
+                                    className="w-full"
+                                >
+                                    <Select.Option value="DEPENDENCY">标准依赖 (Dependency)</Select.Option>
+                                    <Select.Option value="LOOP_BACK">循环回溯 (Loop Back)</Select.Option>
+                                    <Select.Option value="CONDITIONAL">条件分支 (Conditional)</Select.Option>
+                                </Select>
+                            </Form.Item>
+
+                            <div className="bg-slate-50 p-3 rounded text-xs text-slate-500 border border-slate-100 mt-3 leading-relaxed">
+                                {selectedEdge.data?.edgeType === 'LOOP_BACK' ? (
+                                    <p><InfoCircleOutlined className="mr-1" /> 循环边允许流程回溯到之前的节点。请注意，循环次数受最大迭代限制 (Max Loop Iterations) 控制，防止死循环。</p>
+                                ) : selectedEdge.data?.edgeType === 'CONDITIONAL' ? (
+                                    <p><InfoCircleOutlined className="mr-1" /> 条件边通常由路由节点控制，根据执行结果动态选择路径。</p>
+                                ) : (
+                                    <p><InfoCircleOutlined className="mr-1" /> 标准依赖边表示正常的流程执行顺序。</p>
+                                )}
+                            </div>
+                        </Form>
                     </div>
                 </div>
 
-                <div className="p-4 flex-1">
-                    <Form layout="vertical">
-                        <Form.Item label="连接类型">
-                            <Select
-                                value={selectedEdge.data?.edgeType || 'DEPENDENCY'}
-                                onChange={(val) => updateEdgeData(selectedEdge.id, { edgeType: val })}
-                            >
-                                <Select.Option value="DEPENDENCY">标准依赖 (Dependency)</Select.Option>
-                                <Select.Option value="LOOP_BACK">循环回溯 (Loop Back)</Select.Option>
-                                <Select.Option value="CONDITIONAL">条件分支 (Conditional)</Select.Option>
-                            </Select>
-                        </Form.Item>
-
-                        <div className="bg-gray-50 p-3 rounded text-xs text-gray-500">
-                            {selectedEdge.data?.edgeType === 'LOOP_BACK' ? (
-                                <p>循环边允许流程回溯到之前的节点。请注意，循环次数受最大迭代限制 (Max Loop Iterations) 控制，防止死循环。</p>
-                            ) : selectedEdge.data?.edgeType === 'CONDITIONAL' ? (
-                                <p>条件边通常由路由节点控制，根据执行结果动态选择路径。</p>
-                            ) : (
-                                <p>标准依赖边表示正常的流程执行顺序。</p>
-                            )}
-                        </div>
-                    </Form>
-                </div>
-
-                {/* Footer Actions for Edge */}
-                <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end">
-                    <Button
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={() => {
-                            Modal.confirm({
-                                title: '确认删除',
-                                content: '确定要删除该连接线吗？',
-                                okText: '删除',
-                                okType: 'danger',
-                                cancelText: '取消',
-                                onOk: () => {
-                                    if (selectedEdgeId) {
-                                        deleteEdge(selectedEdgeId);
-                                        if (onClose) onClose();
-                                    }
-                                }
-                            });
-                        }}
-                    >
+                <div className="p-4 border-t border-slate-200 bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                    <Button block danger icon={<DeleteOutlined />} onClick={() => {
+                        Modal.confirm({
+                            title: '删除连接', content: '确定要删除该连接线吗？',
+                            okText: '删除', okType: 'danger', cancelText: '取消',
+                            onOk: () => {
+                                if (selectedEdgeId) { deleteEdge(selectedEdgeId); if (onClose) onClose(); }
+                            }
+                        });
+                    }}>
                         删除连接
                     </Button>
                 </div>
@@ -419,95 +309,58 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
 
     if (!selectedNode) {
         return (
-            <div className="h-full flex flex-col bg-white shadow-xl rounded-lg overflow-hidden border border-gray-200">
-                <div
-                    className="flex justify-end p-2 bg-gray-50 border-b border-gray-100 cursor-move"
-                    onMouseDown={onHeaderMouseDown}
-                >
-                    {onClose && (
-                        <Button
-                            type="text"
-                            icon={<span className="text-gray-400 text-lg">×</span>}
-                            onClick={onClose}
-                            size="small"
-                        />
-                    )}
-                </div>
-                <div className="flex-1 flex items-center justify-center text-gray-400 bg-gray-50">
-                    <div className="text-center">
-                        <div className="mb-2">请选择一个节点或连接线</div>
-                        <div className="text-xs text-gray-300">点击画布上的元素进行配置</div>
-                    </div>
-                </div>
+            <div className="h-full flex flex-col items-center justify-center bg-slate-50 text-slate-400">
+                <NodeIndexOutlined className="text-4xl mb-3 text-slate-300" />
+                <div className="text-sm font-medium">未选择对象</div>
+                <div className="text-xs mt-1">请点击画布中的节点或连线</div>
+                {onClose && <Button type="dashed" className="mt-6" onClick={onClose}>关闭面板</Button>}
             </div>
         );
     }
 
     return (
-        <div className="h-full flex flex-col bg-white shadow-xl rounded-lg overflow-hidden border border-gray-200">
-            <div
-                className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 cursor-move transition-colors hover:bg-gray-100"
-                onMouseDown={onHeaderMouseDown}
-            >
-                <div className="flex items-center gap-2">
-                    {onClose && (
-                        <Button
-                            type="text"
-                            icon={<span className="text-gray-400">⇤</span>}
-                            onClick={onClose}
-                            className="mr-1"
-                            size="small"
-                            title="隐藏面板"
-                        />
-                    )}
-                    <div>
-                        <div className="font-bold text-gray-800">{(selectedNode.data?.label as React.ReactNode) || '未命名节点'}</div>
-                        <div className="text-xs text-gray-400 font-mono mt-1">{selectedNode.id}</div>
+        <div className="h-full flex flex-col bg-slate-50">
+            <div className="p-4 border-b border-slate-200 bg-white flex justify-between items-center shadow-sm z-10">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 font-bold text-xs ring-2 ring-blue-50">
+                        {(selectedNode.data?.nodeType as string)?.substring(0, 2) || 'ND'}
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                        <div className="font-bold text-slate-800 text-sm truncate max-w-[150px]" title={selectedNode.data?.label as string}>
+                            {(selectedNode.data?.label as React.ReactNode) || '未命名节点'}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">{selectedNode.id}</div>
                     </div>
                 </div>
-                <div className="tag px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-xs font-semibold">
-                    {(selectedNode.data?.nodeType as string) || (selectedNode.type as string)}
-                </div>
+                {onClose && <Button type="text" icon={<CloseOutlined />} onClick={onClose} className="text-slate-400 hover:text-red-500" />}
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-4 bg-gray-50/50">
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                 {loading ? (
-                    <div className="flex justify-center items-center h-40">
-                        <Spin tip="加载配置中..." />
+                    <div className="flex flex-col justify-center items-center h-40 gap-3">
+                        <Spin />
+                        <span className="text-xs text-slate-400">加载配置中...</span>
                     </div>
                 ) : Object.keys(fieldDefsMap).length === 0 ? (
                     <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无配置项" />
                 ) : (
-                    <Form
-                        form={form}
-                        layout="vertical"
-                        onValuesChange={handleValuesChange}
-                        className="py-2"
-                    >
+                    <Form form={form} layout="vertical" onValuesChange={handleValuesChange} className="space-y-4">
                         {Object.keys(fieldDefsMap).map(configType => {
                             const configDef = configDefsMap[configType];
                             const fieldDefs = fieldDefsMap[configType] || [];
                             const hasOptions = configDef?.options && configDef.options.length > 0;
 
                             return (
-                                <div key={configType} className="mb-4 bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-all duration-300">
-                                    <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-50">
-                                        <div className="w-1 h-4 bg-blue-500 rounded-full shadow-sm shadow-blue-200" />
-                                        <span className="font-bold text-gray-700 text-sm">{configDef?.configName || configType}</span>
+                                <div key={configType} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-shadow">
+                                    <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-50">
+                                        <SettingOutlined className="text-blue-500" />
+                                        <span className="font-bold text-slate-700 text-sm">{configDef?.configName || configType}</span>
                                     </div>
-
-                                    {configDef?.description && (
-                                        <p className="text-xs text-gray-400 mb-4 px-1">{configDef.description}</p>
-                                    )}
+                                    {configDef?.description && <p className="text-xs text-slate-400 mb-4 bg-slate-50 p-2 rounded">{configDef.description}</p>}
 
                                     {configType === 'MODEL' ? (
-                                        <ModelConfig
-                                            configDef={configDef!}
-                                            fieldDefs={fieldDefs}
-                                        />
+                                        <ModelConfig configDef={configDef!} fieldDefs={fieldDefs} />
                                     ) : hasOptions ? (
-                                        // Case: Options exist (e.g. ADVISOR, MCP_TOOL selection)
-                                        // Render a Select for the ID
                                         <Form.Item
                                             key={`${configType}-selection`}
                                             name={[configType, getIdFieldName(configType)]}
@@ -517,20 +370,20 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
                                             <Select
                                                 placeholder={['MCP_TOOL', 'ADVISOR'].includes(configType) ? "请选择 (可选)" : "请选择"}
                                                 allowClear={['MCP_TOOL', 'ADVISOR'].includes(configType)}
+                                                className="w-full"
                                             >
                                                 {configDef!.options!.map(opt => (
                                                     <Select.Option key={opt.id} value={opt.id}>
-                                                        {opt.name} {opt.type ? <span className="text-gray-400 text-xs">({opt.type})</span> : ''}
+                                                        {opt.name} {opt.type ? <span className="text-slate-400 text-xs">({opt.type})</span> : ''}
                                                     </Select.Option>
                                                 ))}
                                             </Select>
                                         </Form.Item>
                                     ) : (
-                                        // Case: No options, render dynamic fields (e.g. TIMEOUT, USER_PROMPT)
                                         fieldDefs.map(field => (
                                             <Form.Item
                                                 key={field.fieldName}
-                                                name={[configType, field.fieldName]} // Nested binding
+                                                name={[configType, field.fieldName]}
                                                 label={field.fieldLabel}
                                                 rules={[{ required: field.required, message: '此项必填' }]}
                                                 tooltip={field.description}
@@ -547,27 +400,14 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ onClose, onHeaderMouseDown })
                 )}
             </div>
 
-            {/* Footer Actions */}
-            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end">
-                <Button
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={() => {
-                        Modal.confirm({
-                            title: '确认删除',
-                            content: '确定要删除该节点吗？',
-                            okText: '删除',
-                            okType: 'danger',
-                            cancelText: '取消',
-                            onOk: () => {
-                                if (selectedNodeId) {
-                                    deleteNode(selectedNodeId);
-                                    if (onClose) onClose();
-                                }
-                            }
-                        });
-                    }}
-                >
+            <div className="p-4 border-t border-slate-200 bg-white flex justify-end shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                <Button block danger icon={<DeleteOutlined />} onClick={() => {
+                    Modal.confirm({
+                        title: '删除节点', content: '确定要删除该节点吗？',
+                        okText: '删除', okType: 'danger', cancelText: '取消',
+                        onOk: () => { if (selectedNodeId) { deleteNode(selectedNodeId); if (onClose) onClose(); } }
+                    });
+                }}>
                     删除节点
                 </Button>
             </div>

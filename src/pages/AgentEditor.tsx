@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, message, Input, Spin, Modal } from 'antd';
-import { SaveOutlined, ArrowLeftOutlined, SettingOutlined, ExpandAltOutlined } from '@ant-design/icons';
+import { Button, message, Input, Spin, Modal, Tooltip } from 'antd';
+import { SaveOutlined, ArrowLeftOutlined, ExpandAltOutlined, InfoCircleOutlined, ThunderboltOutlined, SettingOutlined } from '@ant-design/icons';
 import Sidebar from '@/components/editor/Sidebar';
 import FlowCanvasWrapper from '@/components/editor/FlowCanvas';
 import ConfigPanel from '@/components/editor/ConfigPanel';
@@ -12,7 +12,7 @@ import { convertToGraphJsonSchema, convertFromGraphJsonSchema } from '@/utils/gr
 const AgentEditor: React.FC = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { nodes, edges, setGraph, selectedNodeId } = useAgentStore();
+    const { nodes, edges, setGraph, selectedNodeId, selectedEdgeId } = useAgentStore();
 
     const [loading, setLoading] = useState(false);
     const [agentName, setAgentName] = useState('My New Agent');
@@ -20,102 +20,12 @@ const AgentEditor: React.FC = () => {
     const [showConfig, setShowConfig] = useState(true);
     const [showDescModal, setShowDescModal] = useState(false);
 
-    // Auto-show config panel when a node is selected
+    // Auto-show config panel when a node or edge is selected
     useEffect(() => {
-        if (selectedNodeId) {
+        if (selectedNodeId || selectedEdgeId) {
             setShowConfig(true);
         }
-    }, [selectedNodeId]);
-
-    // Unified drag state
-    const [positions, setPositions] = useState({
-        panel: { x: window.innerWidth - 350, y: 80 },
-        button: { x: window.innerWidth - 120, y: 20 }
-    });
-
-    // Refs for direct DOM manipulation to avoid re-renders during drag
-    const panelRef = useRef<HTMLDivElement>(null);
-    const buttonRef = useRef<any>(null); // Button supports ref forwarding, use any to avoid TS issues
-
-    const dragRef = useRef({
-        startX: 0,
-        startY: 0,
-        initialX: 0,
-        initialY: 0,
-        target: null as 'panel' | 'button' | null
-    });
-
-    const handleDragStart = (e: React.MouseEvent, target: 'panel' | 'button') => {
-        e.preventDefault(); // Prevent text selection
-        e.stopPropagation(); // Stop propagation
-
-        const currentPos = positions[target];
-        dragRef.current = {
-            startX: e.clientX,
-            startY: e.clientY,
-            initialX: currentPos.x,
-            initialY: currentPos.y,
-            target
-        };
-        document.addEventListener('mousemove', handleDragMove);
-        document.addEventListener('mouseup', handleDragEnd);
-    };
-
-    const handleDragMove = (e: MouseEvent) => {
-        if (!dragRef.current.target) return;
-
-        requestAnimationFrame(() => {
-            const { startX, startY, initialX, initialY, target } = dragRef.current;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-
-            const newX = initialX + dx;
-            const newY = initialY + dy;
-
-            // Simple boundary constraints
-            const maxX = window.innerWidth - (target === 'panel' ? 320 : 120);
-            const maxY = window.innerHeight - (target === 'panel' ? 40 : 40);
-
-            const clampedX = Math.max(0, Math.min(newX, maxX));
-            const clampedY = Math.max(0, Math.min(newY, maxY));
-
-            // Direct DOM update
-            const el = target === 'panel' ? panelRef.current : buttonRef.current;
-            if (el) {
-                // Button ref from Antd might be a component wrapper, need findDOMNode or use native element if forwarded
-                // If it's a reacting component, check if we can style it.
-                // Antd button forwards ref to button element usually.
-                el.style.left = `${clampedX}px`;
-                el.style.top = `${clampedY}px`;
-            }
-        });
-    };
-
-    const handleDragEnd = (e: MouseEvent) => {
-        const { target, startX, startY, initialX, initialY } = dragRef.current;
-
-        if (target) {
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            const newX = initialX + dx;
-            const newY = initialY + dy;
-
-            const maxX = window.innerWidth - (target === 'panel' ? 320 : 120);
-            const maxY = window.innerHeight - (target === 'panel' ? 40 : 40);
-
-            setPositions(prev => ({
-                ...prev,
-                [target]: {
-                    x: Math.max(0, Math.min(newX, maxX)),
-                    y: Math.max(0, Math.min(newY, maxY))
-                }
-            }));
-        }
-
-        dragRef.current.target = null;
-        document.removeEventListener('mousemove', handleDragMove);
-        document.removeEventListener('mouseup', handleDragEnd);
-    };
+    }, [selectedNodeId, selectedEdgeId]);
 
     // Load agent data if id exists
     useEffect(() => {
@@ -145,7 +55,6 @@ const AgentEditor: React.FC = () => {
             setDescription(agent.description);
 
             // Create a lookup map for node templates
-            // Cast nodeTemplates to any[] to handle potential type mismatch with AxiosResponse
             const templatesArray = (Array.isArray(nodeTemplates) ? nodeTemplates : (nodeTemplates as any)?.data || []) as any[];
             const nodeTypeMap = new Map(templatesArray.map((t: any) => [t.nodeType, t]));
 
@@ -156,19 +65,15 @@ const AgentEditor: React.FC = () => {
 
                     // Enrich nodes with metadata
                     const enrichedNodes = nodes.map(node => {
-                        // The loaded node.type is the business type (e.g. LLM_NODE) from backend schema
                         const businessType = node.type || 'UNKNOWN';
                         const typeDef = nodeTypeMap.get(businessType) as any;
 
-                        // If modelId exists, do not show custom configuration (apiKey, baseUri)
                         const nodeData = { ...node.data };
                         if (nodeData.modelId) {
                             delete nodeData.apiKey;
                             delete nodeData.baseUri;
                         }
 
-                        // Parse editableFields from template
-                        // editableFields is a JSON string like '["MODEL", "USER_PROMPT", "TIMEOUT"]'
                         let supportedConfigs: string[] = [];
                         if (typeDef?.editableFields) {
                             try {
@@ -184,7 +89,7 @@ const AgentEditor: React.FC = () => {
 
                         return {
                             ...node,
-                            type: 'custom', // Use custom node type for visual rendering
+                            type: 'custom',
                             data: {
                                 ...nodeData,
                                 nodeType: businessType,
@@ -193,14 +98,12 @@ const AgentEditor: React.FC = () => {
                         };
                     });
 
-                    // Enrich edges with type: 'custom' for proper rendering
                     const enrichedEdges = (edges || []).map(edge => ({
                         ...edge,
                         type: 'custom',
                     }));
 
                     setGraph(enrichedNodes || [], enrichedEdges);
-                    // Update global store nodeTypes if needed, though Sidebar checks it self
                     useAgentStore.getState().setNodeTypes(templatesArray);
 
                 } catch (e) {
@@ -219,7 +122,6 @@ const AgentEditor: React.FC = () => {
     const handleSave = async () => {
         setLoading(true);
         try {
-            // Convert to backend GraphJsonSchema format
             const graphSchema = convertToGraphJsonSchema(
                 nodes,
                 edges,
@@ -228,9 +130,8 @@ const AgentEditor: React.FC = () => {
             );
             const graphJson = JSON.stringify(graphSchema);
 
-            // 注意：后端期望的字段名是 agentId (String类型)，不是 id
             await saveAgent({
-                agentId: id || undefined,  // 保持为 string 类型
+                agentId: id || undefined,
                 agentName,
                 description,
                 graphJson,
@@ -239,8 +140,6 @@ const AgentEditor: React.FC = () => {
 
             message.success('保存成功');
             if (!id) {
-                // Navigate to list or stay? 
-                // Ideally backend returns ID to navigate to /agent/editor/:id
                 navigate('/dashboard');
             }
         } catch (error) {
@@ -252,114 +151,122 @@ const AgentEditor: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-screen w-full overflow-hidden">
+        <div className="flex flex-col h-screen w-full bg-slate-50 overflow-hidden font-sans">
             {/* Header */}
-            <div className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4">
-                <div className="flex items-center gap-4">
-                    <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/dashboard')}>
-                        返回
-                    </Button>
-                    <Input
-                        value={agentName}
-                        onChange={e => setAgentName(e.target.value)}
-                        className="w-48 font-bold border-transparent hover:border-gray-300 focus:border-blue-500 text-lg !px-2"
-                        placeholder="Agent名称"
-                    />
-                    <div className="h-6 w-px bg-gray-300 mx-2" />
-                    <Input
-                        value={description}
-                        onChange={e => setDescription(e.target.value)}
-                        className="w-96 border-transparent hover:border-gray-300 focus:border-blue-500 text-gray-500 !px-2"
-                        placeholder="在此输入Agent描述..."
-                    />
+            <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 z-30 shadow-sm relative shrink-0">
+                <div className="flex items-center gap-4 flex-1">
                     <Button
                         type="text"
-                        icon={<ExpandAltOutlined />}
-                        onClick={() => setShowDescModal(true)}
-                        className="text-gray-400 hover:text-blue-500"
-                    />
+                        icon={<ArrowLeftOutlined />}
+                        onClick={() => navigate('/dashboard')}
+                        className="text-slate-500 hover:text-slate-900"
+                    >
+                        返回
+                    </Button>
+                    <div className="h-6 w-px bg-slate-200" />
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md">
+                            <ThunderboltOutlined />
+                        </div>
+                        <Input
+                            value={agentName}
+                            onChange={e => setAgentName(e.target.value)}
+                            className="w-64 font-bold text-lg border-transparent hover:border-slate-300 focus:border-indigo-500 !bg-transparent !shadow-none px-2"
+                            placeholder="Agent Name"
+                        />
+                    </div>
+                    {description && (
+                        <div className="hidden md:flex items-center gap-2 max-w-md">
+                            <span className="text-slate-300">/</span>
+                            <span className="text-slate-500 truncate text-sm">{description}</span>
+                            <Button
+                                type="text"
+                                size="small"
+                                icon={<ExpandAltOutlined />}
+                                onClick={() => setShowDescModal(true)}
+                                className="text-slate-400 hover:text-indigo-500"
+                            />
+                        </div>
+                    )}
                 </div>
-                <div className="flex items-center gap-2">
+
+                <div className="flex items-center gap-3">
+                    <Tooltip title={showConfig ? "隐藏配置面板" : "显示配置面板"}>
+                        <Button
+                            icon={<SettingOutlined />}
+                            type={showConfig ? 'default' : 'text'}
+                            onClick={() => setShowConfig(!showConfig)}
+                            className={showConfig ? 'border-indigo-200 text-indigo-600 bg-indigo-50' : 'text-slate-500'}
+                        />
+                    </Tooltip>
                     <Button
                         type="primary"
                         icon={<SaveOutlined />}
                         loading={loading}
                         onClick={handleSave}
+                        className="shadow-lg shadow-indigo-200 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 border-none px-6 h-9"
                     >
-                        保存
+                        保存 Agent
                     </Button>
                 </div>
             </div>
 
-            {/* Body */}
-            <div className="flex-1 flex overflow-hidden">
-                {/* Center Column: Canvas + Bottom Dock */}
-                <div className="flex-1 flex flex-col relative min-w-0">
-                    {/* Main Canvas */}
-                    <div className="flex-1 bg-gray-50 relative">
-                        {loading && id ? (
-                            <div className="absolute inset-0 flex items-center justify-center bg-white/50 z-50">
-                                <Spin size="large" />
-                            </div>
-                        ) : (
-                            <FlowCanvasWrapper />
-                        )}
-                        {!showConfig && (
-                            <Button
-                                ref={buttonRef}
-                                icon={<SettingOutlined />}
-                                className="fixed z-50 shadow-md cursor-move"
-                                style={{
-                                    top: positions.button.y,
-                                    left: positions.button.x
-                                }}
-                                onMouseDown={(e) => handleDragStart(e, 'button')}
-                                onClick={(e) => {
-                                    // Simple check to prevent click if dragged (though simplified here)
-                                    setShowConfig(true);
-                                }}
-                            >
-                                配置面板
-                            </Button>
-                        )}
-                    </div>
+            {/* Main Workspace */}
+            <div className="flex-1 flex overflow-hidden relative">
+                {/* Left Sidebar: Node Library */}
+                <Sidebar />
 
-                    {/* Bottom Node Library */}
-                    <Sidebar />
+                {/* Center: Canvas */}
+                <div className="flex-1 relative bg-slate-50 overflow-hidden">
+                    {loading && id ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm z-50">
+                            <Spin size="large" />
+                            <span className="mt-4 text-slate-500 font-medium">Loading Agent...</span>
+                        </div>
+                    ) : (
+                        <FlowCanvasWrapper />
+                    )}
+
+                    {/* Floating Controls Overlay (Zoom etc, if any) */}
+                    <div className="absolute bottom-4 left-4 z-10 text-xs text-slate-400 pointer-events-none select-none">
+                        Ai Agent Workbench v2.0
+                    </div>
                 </div>
 
-                {/* Right Sidebar - Config Panel (Floating) */}
+                {/* Right Sidebar: Configuration */}
                 {showConfig && (
-                    <div
-                        className="fixed right-4 top-20 w-80 bg-white shadow-2xl z-50 rounded-lg flex flex-col border border-gray-200"
-                        style={{
-                            height: 'calc(100vh - 200px)', // Adjust height constraint
-                            maxHeight: '1000px'
-                        }}
-                    >
-                        <ConfigPanel
-                            onClose={() => setShowConfig(false)}
-                        />
+                    <div className="w-96 bg-white border-l border-slate-200 shadow-xl z-20 flex flex-col transition-all">
+                        <ConfigPanel onClose={() => setShowConfig(false)} />
                     </div>
                 )}
             </div>
 
-
             <Modal
-                title="编辑 Agent 描述"
+                title={
+                    <div className="flex items-center gap-2">
+                        <InfoCircleOutlined className="text-indigo-500" />
+                        <span>编辑 Agent 描述</span>
+                    </div>
+                }
                 open={showDescModal}
                 onOk={() => setShowDescModal(false)}
                 onCancel={() => setShowDescModal(false)}
-                width={600}
+                width={500}
+                centered
+                okButtonProps={{ className: 'bg-indigo-600' }}
             >
-                <Input.TextArea
-                    rows={6}
-                    value={description}
-                    onChange={e => setDescription(e.target.value)}
-                    placeholder="请输入详细的 Agent 描述..."
-                />
+                <div className="pt-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">描述</label>
+                    <Input.TextArea
+                        rows={6}
+                        value={description}
+                        onChange={e => setDescription(e.target.value)}
+                        placeholder="请输入详细的 Agent 描述..."
+                        className="!resize-none text-slate-600"
+                    />
+                </div>
             </Modal>
-        </div >
+        </div>
     );
 };
 

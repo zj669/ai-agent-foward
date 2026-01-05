@@ -1,27 +1,26 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Button, Input, List, Avatar, Spin, message, Card, Layout, Typography, Tooltip, Empty, Collapse, Drawer, Grid, Select } from 'antd';
+import { Button, Input, List, Avatar, Spin, message, Tooltip, Empty, Collapse, Drawer, Grid, Dropdown, Badge } from 'antd';
 import {
-    UserOutlined, RobotOutlined, MessageOutlined, PlusOutlined, DeleteOutlined,
-    StopOutlined, SendOutlined, ArrowLeftOutlined, FunctionOutlined, MenuUnfoldOutlined, MenuFoldOutlined
+    UserOutlined, RobotOutlined, PlusOutlined, DeleteOutlined,
+    StopOutlined, SendOutlined, ArrowLeftOutlined, FunctionOutlined,
+    MenuOutlined, MoreOutlined, HistoryOutlined, ThunderboltOutlined,
+    SettingOutlined, LogoutOutlined, DownOutlined, ShareAltOutlined,
+    MessageOutlined
 } from '@ant-design/icons';
-import ReactMarkdown from 'react-markdown';
-// @ts-ignore
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-// @ts-ignore
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { getNewConversationId, getChatHistory, getAgentDetail, getConversationIds, getContextSnapshot, getAgentList } from '../api/agent';
 import { AiAgent } from '@/types';
-import '../styles/chat.css'; // Import custom styles
+import '../styles/chat.css';
 import MessageBubble from '../components/chat/MessageBubble';
-import EmptyState from '../components/chat/EmptyState';
 import HumanInterventionReview from '../components/chat/HumanInterventionReview';
 import DagVisualizationPanel from '../components/chat/DagVisualizationPanel';
-import { ChatMessage, NodeExecution, HumanInterventionState, DagNode, DagEdge } from '../components/chat/types';
+import { ChatMessage, HumanInterventionState, DagNode, DagEdge } from '../components/chat/types';
 import { convertFromGraphJsonSchema } from '@/utils/graphConverter';
 import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
 
-const { Sider, Content } = Layout;
+dayjs.extend(relativeTime);
+
 const { useBreakpoint } = Grid;
 
 interface ConversationItem {
@@ -54,33 +53,38 @@ const AgentChat: React.FC = () => {
     const [errorNodeId, setErrorNodeId] = useState<string | null>(null);
     const [pausedNodeId, setPausedNodeId] = useState<string | null>(null);
     const [isDagPanelVisible, setIsDagPanelVisible] = useState(true);
-    // For smaller screens
-    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-    // ⭐ 快照刷新触发器 - 工作流完成后更新这个key以触发快照重新加载
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [snapshotRefreshKey, setSnapshotRefreshKey] = useState(0);
 
     // Refs
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const conversationIdRef = useRef<string>('');
     const abortControllerRef = useRef<AbortController | null>(null);
+    const chatContainerRef = useRef<HTMLDivElement>(null);
 
     // Load Data
     useEffect(() => {
-        console.log('AgentChat mounted, id:', id);
-
-        // 防御性检查：如果 id 无效，重定向到 Dashboard
         if (!id || id === 'undefined') {
-            console.warn('Invalid agent ID, redirecting to dashboard');
             message.error('无效的 Agent ID');
             navigate('/dashboard');
             return;
         }
 
         fetchAgentList();
-        console.log('Fetching agent info and history for id:', id);
         fetchAgentInfo(id);
         loadConversationHistory(id);
     }, [id, navigate]);
+
+    // Responsive Logic
+    useEffect(() => {
+        if (!screens.xl) {
+            setIsDagPanelVisible(false);
+            setIsSidebarOpen(false);
+        } else {
+            setIsDagPanelVisible(true);
+            setIsSidebarOpen(true);
+        }
+    }, [screens.xl]);
 
     const fetchAgentList = async () => {
         try {
@@ -91,30 +95,17 @@ const AgentChat: React.FC = () => {
         }
     };
 
-    // Responsive Logic
-    useEffect(() => {
-        if (screens.xl) {
-            setIsDagPanelVisible(true);
-        } else {
-            setIsDagPanelVisible(false);
-        }
-    }, [screens.xl]);
-
     const fetchAgentInfo = async (agentId: string) => {
-        console.log('fetchAgentInfo called for:', agentId);
         try {
             const agent = await getAgentDetail(agentId);
-            // ... (rest of function)
             setAgentName(agent.agentName || 'Agent');
             setAgentDesc(agent.description || '智能助手');
 
-            // Parse DAG structure
             if (agent.graphJson) {
                 try {
                     const schema = JSON.parse(agent.graphJson);
                     const { nodes, edges } = convertFromGraphJsonSchema(schema);
 
-                    // Transform to partial DAG Structure
                     const dNodes = nodes.map(node => ({
                         id: node.id,
                         type: 'custom',
@@ -145,75 +136,26 @@ const AgentChat: React.FC = () => {
     };
 
     const loadConversationHistory = async (agentId: string) => {
-        console.log('loadConversationHistory called for agentId:', agentId);
         try {
             const res = await getConversationIds(agentId);
             const list = Array.isArray(res) ? res : (res as any).data || [];
-            console.log('getConversationIds returned list:', list);
             setConversations(list.map((item: string) => ({ conversationId: item })));
 
-            // 自动选择第一个会话并加载历史消息
             if (list.length > 0 && !conversationId) {
                 const firstConversationId = list[0];
-                setConversationId(firstConversationId);
-                conversationIdRef.current = firstConversationId;
-
-                // 加载第一个会话的历史消息
-                try {
-                    const res = await getChatHistory(agentId, firstConversationId);
-                    const history = Array.isArray(res) ? res : (res as any).data || [];
-
-                    // 解析历史消息
-                    const parseContent = (content: string) => {
-                        if (typeof content !== 'string') return content;
-                        try {
-                            return JSON.parse(content);
-                        } catch {
-                            return content;
-                        }
-                    };
-
-                    const parsedMessages = history.map((msg: any) => ({
-                        ...msg,
-                        content: parseContent(msg.content)
-                    }));
-
-                    setMessages(parsedMessages);
-
-                    // 尝试恢复人工介入状态
-                    try {
-                        const snapshot = await getContextSnapshot(agentId, firstConversationId);
-                        if (snapshot && snapshot.status === 'PAUSED' && snapshot.humanIntervention) {
-                            setInterventionState({
-                                isPaused: true,
-                                conversationId: firstConversationId,
-                                nodeId: snapshot.humanIntervention.nodeId,
-                                nodeName: snapshot.humanIntervention.nodeName,
-                                checkMessage: snapshot.humanIntervention.checkMessage,
-                                allowModifyOutput: snapshot.humanIntervention.allowModifyOutput
-                            });
-                            setPausedNodeId(snapshot.humanIntervention.nodeId);
-                        }
-                    } catch (snapshotError: any) {
-                        console.log('未找到暂停状态或加载失败:', snapshotError.message);
-                    }
-                } catch (historyError) {
-                    console.error('Failed to load history for first conversation:', historyError);
-                }
+                selectConversation(firstConversationId, true);
             }
         } catch (e) {
             console.error('Failed to load history', e);
         }
     };
 
-    // Auto-scroll (Smart Lock)
     useLayoutEffect(() => {
         if (messagesEndRef.current) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
     }, [messages, loading, activeNodeId]);
 
-    // Cleanup
     useEffect(() => {
         return () => {
             if (abortControllerRef.current) {
@@ -230,18 +172,27 @@ const AgentChat: React.FC = () => {
         setInterventionState(null);
     };
 
-    const startNewChat = () => {
+    const startNewChat = async () => {
         if (loading) return;
         setConversationId('');
         conversationIdRef.current = '';
         setMessages([]);
         setInput('');
         resetDagState();
+
+        try {
+            const newId = await getNewConversationId();
+            setConversationId(newId);
+            conversationIdRef.current = newId;
+            setConversations(prev => [{ conversationId: newId }, ...prev]);
+        } catch (error) {
+            message.error("创建新会话失败");
+        }
     };
 
-    const selectConversation = async (cid: string) => {
-        if (cid === conversationId) return;
-        if (loading) {
+    const selectConversation = async (cid: string, force = false) => {
+        if (!force && cid === conversationId) return;
+        if (loading && !force) {
             message.warning('请先停止当前对话');
             return;
         }
@@ -252,32 +203,24 @@ const AgentChat: React.FC = () => {
         resetDagState();
 
         try {
-            // 查询历史消息 - 需要传递agentId
             const history = await getChatHistory(id!, cid);
-
-            // 辅助函数：解析可能被 JSON 字符串化的 content
             const parseContent = (content: string | null | undefined): string => {
                 if (!content) return '';
                 if (content.startsWith('"') && content.endsWith('"')) {
-                    try {
-                        return JSON.parse(content);
-                    } catch {
-                        return content;
-                    }
+                    try { return JSON.parse(content); } catch { return content; }
                 }
                 return content;
             };
 
             if (history) {
                 const data = Array.isArray(history) ? history : (history as any).data || [];
-
                 const historyMessages: ChatMessage[] = data.map((msg: any) => ({
                     role: msg.role,
                     content: parseContent(msg.content),
                     nodes: (msg.nodes || []).map((node: any) => ({
                         nodeId: node.nodeId,
                         nodeName: node.nodeName,
-                        status: node.status as 'pending' | 'running' | 'completed' | 'error',
+                        status: node.status,
                         content: parseContent(node.content),
                         startTime: 0,
                         duration: node.duration,
@@ -289,28 +232,14 @@ const AgentChat: React.FC = () => {
                     loading: false,
                     dagProgress: msg.dagProgress
                 }));
-
                 setMessages(historyMessages);
-
-
-
-                if (historyMessages.length > 0) {
-                    message.success(`已加载 ${historyMessages.length} 条历史消息`);
-                } else {
-                    message.info('该会话暂无历史消息');
-                }
-            } else {
-                throw new Error('加载失败');
             }
 
-            // 尝试恢复人工介入状态
+            // Restore intervention state
             try {
                 const { getContextSnapshot } = await import('@/api/agent');
                 const snapshot = await getContextSnapshot(id!, cid);
-
-                // 根据新的API结构判断是否处于暂停状态
                 if (snapshot && snapshot.status === 'PAUSED' && snapshot.humanIntervention) {
-                    // 恢复人工介入状态
                     setInterventionState({
                         isPaused: true,
                         conversationId: cid,
@@ -320,20 +249,15 @@ const AgentChat: React.FC = () => {
                         allowModifyOutput: snapshot.humanIntervention.allowModifyOutput
                     });
                     setPausedNodeId(snapshot.humanIntervention.nodeId);
-                    console.log('已恢复人工介入状态:', snapshot.humanIntervention.nodeId);
                 }
-            } catch (snapshotError: any) {
-                // 如果没有快照或加载失败，不影响主流程
-                console.log('未找到暂停状态或加载失败:', snapshotError.message);
+            } catch (e) {
+                // Ignore snapshot errors
             }
-
         } catch (e: any) {
-            console.error('加载历史消息失败', e);
-            message.error('加载历史消息失败: ' + (e.message || '未知错误'));
+            message.error('加载历史消息失败');
             setMessages([]);
         }
     };
-
 
     const processStream = async (reader: ReadableStreamDefaultReader<Uint8Array>) => {
         const decoder = new TextDecoder();
@@ -371,20 +295,16 @@ const AgentChat: React.FC = () => {
                         setLoading(false);
                         return;
                     }
-                } catch (e) {
-                    console.warn('SSE Parse Error', e);
-                }
+                } catch (e) { console.warn('SSE Parse Error', e); }
             }
         }
     };
 
     const handleSend = async (userInput?: string, isResume: boolean = false) => {
         const messageToSend = isResume ? '' : (userInput || input);
-
         if (!isResume && !messageToSend.trim()) return;
 
         if (!isResume) {
-            // New interaction, reset partial DAG state for new run
             setActiveNodeId(null);
             setErrorNodeId(null);
             setPausedNodeId(null);
@@ -418,7 +338,6 @@ const AgentChat: React.FC = () => {
             if (!conversationId) {
                 setConversationId(chatConversationId);
                 conversationIdRef.current = chatConversationId;
-                // 新对话时，立即添加到历史记录列表
                 setConversations(prev => {
                     if (prev.find(c => c.conversationId === chatConversationId)) return prev;
                     return [{ conversationId: chatConversationId }, ...prev];
@@ -428,7 +347,6 @@ const AgentChat: React.FC = () => {
             const token = localStorage.getItem('token');
             const abortController = new AbortController();
             abortControllerRef.current = abortController;
-
             const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:8080';
 
             const response = await fetch(`${API_BASE_URL}/client/chat`, {
@@ -445,16 +363,11 @@ const AgentChat: React.FC = () => {
                 signal: abortController.signal
             });
 
-            if (!response.ok || !response.body) {
-                throw new Error(response.statusText);
-            }
-
-            const reader = response.body.getReader();
-            await processStream(reader);
+            if (!response.ok || !response.body) throw new Error(response.statusText);
+            await processStream(response.body.getReader());
 
         } catch (error: any) {
             if (error.name !== 'AbortError') {
-                console.error('Chat error', error);
                 message.error('发送消息失败');
                 setMessages(prev => {
                     const newMsgs = [...prev];
@@ -462,13 +375,11 @@ const AgentChat: React.FC = () => {
                     if (lastMsg) {
                         lastMsg.loading = false;
                         lastMsg.error = true;
-                        if (lastMsg.nodes.length === 0) {
-                            lastMsg.content = `[请求失败: ${error.message}]`;
-                        }
+                        if (lastMsg.nodes.length === 0) lastMsg.content = `[请求失败: ${error.message}]`;
                     }
                     return newMsgs;
                 });
-                setErrorNodeId(activeNodeId); // Mark active as error
+                setErrorNodeId(activeNodeId);
                 setActiveNodeId(null);
             }
         } finally {
@@ -482,37 +393,28 @@ const AgentChat: React.FC = () => {
 
     const handleReviewSubmit = async (data: { approved: boolean }) => {
         setLoading(true);
-
         try {
             const token = localStorage.getItem('token');
             const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:8080';
 
             const response = await fetch(`${API_BASE_URL}/client/chat/review`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': token ? `Bearer ${token}` : ''
-                },
+                headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
                 body: JSON.stringify({
                     conversationId: conversationIdRef.current,
                     nodeId: interventionState?.nodeId,
                     approved: data.approved,
-                    agentId: id  // 添加必填的agentId字段
+                    agentId: id
                 })
             });
 
-            if (!response.ok || !response.body) {
-                throw new Error(response.statusText);
-            }
+            if (!response.ok || !response.body) throw new Error(response.statusText);
 
             setInterventionState(null);
-            setPausedNodeId(null); // Clear pause state
-
-            const reader = response.body.getReader();
-            await processStream(reader);
+            setPausedNodeId(null);
+            await processStream(response.body.getReader());
 
         } catch (error) {
-            console.error('Review execution failed', error);
             message.error('恢复执行失败');
         } finally {
             setLoading(false);
@@ -522,31 +424,14 @@ const AgentChat: React.FC = () => {
     const handleSSEEvent = (data: any) => {
         if (data.type === 'dag_start') {
             setMessages(prev => {
-                if (prev.length === 0) return prev;
                 const newMsgs = [...prev];
-                const lastIndex = newMsgs.length - 1;
-                const currentMsg = { ...newMsgs[lastIndex] };
-
+                const currentMsg = { ...newMsgs[newMsgs.length - 1] };
                 if (currentMsg.role === 'assistant') {
-                    currentMsg.dagProgress = {
-                        current: 0,
-                        total: data.totalNodes || 0,
-                        percentage: 0
-                    };
-                    newMsgs[lastIndex] = currentMsg;
+                    currentMsg.dagProgress = { current: 0, total: data.totalNodes || 0, percentage: 0 };
+                    newMsgs[newMsgs.length - 1] = currentMsg;
                 }
                 return newMsgs;
             });
-
-            if (data.conversationId && conversationIdRef.current !== data.conversationId) {
-                conversationIdRef.current = data.conversationId;
-                setConversationId(data.conversationId);
-                setConversations(prev => {
-                    if (prev.find(c => c.conversationId === data.conversationId)) return prev;
-                    return [{ conversationId: data.conversationId }, ...prev];
-                });
-            }
-            // Reset DAG visualization state for new run
             setCompletedNodeIds([]);
             setActiveNodeId(null);
             setErrorNodeId(null);
@@ -555,53 +440,32 @@ const AgentChat: React.FC = () => {
 
         if (data.type === 'dag_complete') {
             setMessages(prev => {
-                if (prev.length === 0) return prev;
                 const newMsgs = [...prev];
-                const lastIndex = newMsgs.length - 1;
-                const currentMsg = { ...newMsgs[lastIndex] };
-
+                const currentMsg = { ...newMsgs[newMsgs.length - 1] };
                 if (currentMsg.role === 'assistant') {
                     currentMsg.loading = false;
-                    if (data.status === 'failed') {
-                        currentMsg.error = true;
-                    }
-                    newMsgs[lastIndex] = currentMsg;
+                    if (data.status === 'failed') currentMsg.error = true;
+                    newMsgs[newMsgs.length - 1] = currentMsg;
                 }
                 return newMsgs;
             });
-
-            // 聊天结束后重置 DAG 状态
             resetDagState();
-            // ⭐ 刷新快照 - 工作流完成后快照可能有新数据
             setSnapshotRefreshKey(prev => prev + 1);
             return;
-        }
-
-        if (data.conversationId && conversationIdRef.current !== data.conversationId) {
-            conversationIdRef.current = data.conversationId;
-            setConversationId(data.conversationId);
-            setConversations(prev => {
-                if (prev.find(c => c.conversationId === data.conversationId)) return prev;
-                return [{ conversationId: data.conversationId }, ...prev];
-            });
         }
 
         setMessages(prev => {
             if (prev.length === 0) return prev;
             const newMsgs = [...prev];
-            const lastIndex = newMsgs.length - 1;
-            const currentMsg = { ...newMsgs[lastIndex] };
-
+            const currentMsg = { ...newMsgs[newMsgs.length - 1] };
             if (currentMsg.role !== 'assistant') return prev;
 
-            // Clone nodes array for safe mutation
             currentMsg.nodes = currentMsg.nodes ? [...currentMsg.nodes] : [];
 
             if (data.type === 'node_lifecycle') {
                 if (data.status === 'starting') {
-                    // Update Message State
-                    const existingNodeIndex = currentMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
-                    if (existingNodeIndex === -1) {
+                    const exists = currentMsg.nodes.find(n => n.nodeId === data.nodeId);
+                    if (!exists) {
                         currentMsg.nodes.push({
                             nodeId: data.nodeId,
                             nodeName: data.nodeName || '未知节点',
@@ -611,180 +475,99 @@ const AgentChat: React.FC = () => {
                             progress: data.progress
                         });
                     }
-
-                    // Update DAG Vis State
                     setActiveNodeId(data.nodeId);
                     setErrorNodeId(null);
                     setPausedNodeId(null);
-
                 } else if (data.status === 'completed') {
-                    let nodeIndex = currentMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
-                    if (nodeIndex === -1 && data.nodeName) {
-                        nodeIndex = currentMsg.nodes.findIndex(n => n.nodeName === data.nodeName && n.status === 'running');
-                    }
-
-                    if (nodeIndex !== -1) {
-                        const updatedNode = {
-                            ...currentMsg.nodes[nodeIndex],
-                            status: 'completed' as const,
+                    const idx = currentMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
+                    if (idx !== -1) {
+                        currentMsg.nodes[idx] = {
+                            ...currentMsg.nodes[idx],
+                            status: 'completed',
                             duration: data.durationMs,
                             result: data.result,
                             progress: data.progress
                         };
-                        currentMsg.nodes[nodeIndex] = updatedNode;
                     }
-
                     if (data.progress && currentMsg.dagProgress) {
-                        currentMsg.dagProgress = {
-                            current: data.progress.current,
-                            total: data.progress.total,
-                            percentage: data.progress.percentage
-                        };
+                        currentMsg.dagProgress = data.progress;
                     }
-
-                    // Update DAG Vis State
-                    setCompletedNodeIds(prevC => [...new Set([...prevC, data.nodeId])]);
-                    if (activeNodeId === data.nodeId) {
-                        setActiveNodeId(null);
-                    }
-
+                    setCompletedNodeIds(prev => [...new Set([...prev, data.nodeId])]);
+                    if (activeNodeId === data.nodeId) setActiveNodeId(null);
                 } else if (data.status === 'failed') {
-                    let nodeIndex = currentMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
-                    if (nodeIndex === -1 && data.nodeName) {
-                        nodeIndex = currentMsg.nodes.findIndex(n => n.nodeName === data.nodeName && n.status === 'running');
+                    const idx = currentMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
+                    if (idx !== -1) {
+                        currentMsg.nodes[idx] = { ...currentMsg.nodes[idx], status: 'error', result: data.result };
                     }
-
-                    if (nodeIndex !== -1) {
-                        const updatedNode = {
-                            ...currentMsg.nodes[nodeIndex],
-                            status: 'error' as const,
-                            duration: data.durationMs,
-                            result: data.result
-                        };
-                        currentMsg.nodes[nodeIndex] = updatedNode;
-                    }
-
-                    // Update DAG Vis State
                     setErrorNodeId(data.nodeId);
                     setActiveNodeId(null);
                 }
             } else if (data.type === 'node_execute') {
-                // Try to find by ID first
-                let nodeIndex = data.nodeId
-                    ? currentMsg.nodes.findIndex(n => n.nodeId === data.nodeId)
-                    : -1;
-
-                // Fallback to finding by name if running
-                if (nodeIndex === -1 && data.nodeName) {
-                    nodeIndex = currentMsg.nodes.findIndex(n => n.nodeName === data.nodeName && n.status === 'running');
+                let idx = currentMsg.nodes.findIndex(n => n.nodeId === data.nodeId);
+                if (idx === -1 && data.nodeName) {
+                    idx = currentMsg.nodes.findIndex(n => n.nodeName === data.nodeName && n.status === 'running');
                 }
-
-                if (nodeIndex === -1 && data.nodeName) {
-                    // Auto-create implied node if missing
-                    const newNode = {
+                if (idx === -1 && data.nodeName) {
+                    currentMsg.nodes.push({
                         nodeId: data.nodeId || `implied_${Date.now()}`,
                         nodeName: data.nodeName,
-                        status: 'running' as const,
+                        status: 'running',
                         content: '',
                         startTime: Date.now()
-                    };
-                    currentMsg.nodes.push(newNode);
-                    nodeIndex = currentMsg.nodes.length - 1;
-
-                    // Also try to find it in DAG to highlight
+                    });
+                    idx = currentMsg.nodes.length - 1;
                     const dagNode = dagNodes.find(n => n.data.label === data.nodeName);
                     if (dagNode) setActiveNodeId(dagNode.id);
                 }
-
-                if (nodeIndex !== -1) {
-                    const updatedNode = { ...currentMsg.nodes[nodeIndex] };
-                    updatedNode.content = (updatedNode.content || '') + (data.content || '');
-                    currentMsg.nodes[nodeIndex] = updatedNode;
+                if (idx !== -1) {
+                    currentMsg.nodes[idx].content = (currentMsg.nodes[idx].content || '') + (data.content || '');
                 }
-            } else if (data.type === 'error') {
-                currentMsg.error = true;
-                currentMsg.loading = false;
-                const errorNode = {
-                    nodeId: 'error_node',
-                    nodeName: '错误',
-                    status: 'error' as const,
-                    content: `[${data.errorCode || 'ERROR'}] ${data.message}`,
-                    startTime: Date.now()
-                };
-                currentMsg.nodes.push(errorNode);
             } else if (data.type === 'token' || data.type === 'answer') {
-                // Final response logic
-                let finalNodeIndex = currentMsg.nodes.findIndex(n => n.nodeName === '最终回复');
-                if (finalNodeIndex === -1) {
-                    const finalNode = {
+                let idx = currentMsg.nodes.findIndex(n => n.nodeName === '最终回复');
+                if (idx === -1) {
+                    currentMsg.nodes.push({
                         nodeId: 'final_response',
                         nodeName: '最终回复',
-                        status: 'running' as const,
+                        status: 'running',
                         content: '',
                         startTime: Date.now()
-                    };
-                    currentMsg.nodes.push(finalNode);
-                    finalNodeIndex = currentMsg.nodes.length - 1;
+                    });
+                    idx = currentMsg.nodes.length - 1;
                 }
-
-                const updatedFinalNode = { ...currentMsg.nodes[finalNodeIndex] };
-                updatedFinalNode.content = (updatedFinalNode.content || '') + (data.content || '');
-                currentMsg.nodes[finalNodeIndex] = updatedFinalNode;
+                currentMsg.nodes[idx].content = (currentMsg.nodes[idx].content || '') + (data.content || '');
             }
 
-            newMsgs[lastIndex] = currentMsg;
+            newMsgs[newMsgs.length - 1] = currentMsg;
             return newMsgs;
         });
     };
 
     const handleStop = async () => {
-        // 1. 取消前端请求
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
         }
 
-        // 2. 调用后端取消接口
         if (conversationIdRef.current) {
             try {
                 const token = localStorage.getItem('token');
                 const API_BASE_URL = (import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:8080';
-
                 await fetch(`${API_BASE_URL}/client/chat/cancel`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': token ? `Bearer ${token}` : ''
-                    },
-                    body: JSON.stringify({
-                        conversationId: conversationIdRef.current
-                    })
+                    headers: { 'Content-Type': 'application/json', 'Authorization': token ? `Bearer ${token}` : '' },
+                    body: JSON.stringify({ conversationId: conversationIdRef.current })
                 });
-
-                console.log('Cancellation request sent');
-            } catch (error) {
-                console.warn('Failed to send cancellation request', error);
-                // 不影响前端状态更新
-            }
+            } catch (error) { console.warn('Cancel failed', error); }
         }
 
-        // 3. 更新前端状态
         setLoading(false);
         setMessages(prev => {
             const newMsgs = [...prev];
-            const lastIndex = newMsgs.length - 1;
-            if (lastIndex >= 0) {
-                const lastMsg = { ...newMsgs[lastIndex] };
-                if (lastMsg.loading) {
-                    lastMsg.loading = false;
-                    lastMsg.nodes = lastMsg.nodes ? lastMsg.nodes.map(n => {
-                        if (n.status === 'running') {
-                            return { ...n, status: 'error' as const };
-                        }
-                        return n;
-                    }) : [];
-                    newMsgs[lastIndex] = lastMsg;
-                }
+            const lastMsg = { ...newMsgs[newMsgs.length - 1] };
+            if (lastMsg.loading) {
+                lastMsg.loading = false;
+                lastMsg.nodes = lastMsg.nodes?.map(n => n.status === 'running' ? { ...n, status: 'error' } : n) || [];
+                newMsgs[newMsgs.length - 1] = lastMsg;
             }
             return newMsgs;
         });
@@ -792,238 +575,227 @@ const AgentChat: React.FC = () => {
         setErrorNodeId(activeNodeId);
     };
 
-
     return (
-        <Layout className="h-screen bg-background overflow-hidden">
-            {/* Sidebar - History */}
-            <Sider
-                width={280}
-                className="chat-sidebar hidden md:block border-r border-border"
-                style={{ height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', backgroundColor: '#F8FAFC' }}
-            >
-                <div className="p-6 border-b border-border flex flex-col gap-4">
-                    <div className="flex items-center gap-3 text-ink-900 font-bold text-xl px-2">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center shadow-paper shrink-0 border border-border">
-                            <RobotOutlined className="text-accent text-lg" />
-                        </div>
-                        <span className="flex-1 font-bold text-lg text-ink-900 truncate">
-                            {agentList.find(a => String(a.id) === id)?.agentName || agentName || id}
-                        </span>
+        <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
+            {/* 1. Sidebar */}
+            <div className={`
+                ${isSidebarOpen ? 'w-72 translate-x-0' : 'w-0 -translate-x-full overflow-hidden'}
+                bg-slate-900 border-r border-slate-800 flex flex-col transition-all duration-300 ease-in-out shrink-0 relative
+            `}>
+                {/* Logo Area */}
+                <div className="h-16 flex items-center px-4 border-b border-white/5 gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg">
+                        <ThunderboltOutlined />
                     </div>
+                    <span className="text-white font-bold text-lg tracking-tight">AI Workbench</span>
+                </div>
+
+                {/* Agent Switcher */}
+                <div className="p-4 border-b border-white/5">
+                    <Dropdown
+                        menu={{
+                            items: agentList.map(a => ({
+                                key: a.agentId,
+                                label: <span className="font-medium">{a.agentName}</span>,
+                                onClick: () => navigate(`/agent/chat/${a.agentId}`)
+                            })),
+                            className: "max-h-96 overflow-y-auto"
+                        }}
+                        trigger={['click']}
+                    >
+                        <div className="bg-white/5 hover:bg-white/10 p-3 rounded-xl cursor-pointer transition-all border border-white/5 hover:border-white/20 flex items-center justify-between group">
+                            <div className="flex items-center gap-3">
+                                <Avatar size="small" className="bg-indigo-500 text-xs">{agentName[0]}</Avatar>
+                                <div className="flex flex-col">
+                                    <span className="text-white font-medium text-sm leading-tight">{agentName}</span>
+                                    <span className="text-slate-400 text-xs">正在对话</span>
+                                </div>
+                            </div>
+                            <DownOutlined className="text-slate-500 text-xs group-hover:text-white transition-colors" />
+                        </div>
+                    </Dropdown>
+                </div>
+
+                {/* Conversation List */}
+                <div className="flex-1 overflow-y-auto py-2 px-2 custom-scrollbar">
+                    <div className="px-3 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">会话历史</div>
                     <Button
-                        type="primary"
+                        type="dashed"
                         block
                         icon={<PlusOutlined />}
+                        className="mb-4 bg-transparent border-slate-700 text-slate-400 hover:text-white hover:border-slate-500"
                         onClick={startNewChat}
-                        className="rounded-xl h-11 bg-white border border-border hover:border-accent text-ink-700 shadow-sm transition-all hover:bg-slate-50"
                     >
-                        新对话
+                        新会话
                     </Button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-3 scrollbar-thin">
-                    <div className="text-xs text-ink-400 mb-3 px-3 uppercase tracking-wider font-semibold">历史记录</div>
-                    {conversations.length === 0 ? (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="text-ink-400">暂无历史对话</span>} className="mt-10 opacity-50" />
-                    ) : (
-                        <div className="flex flex-col gap-1.5">
-                            {conversations.map(c => (
-                                <div
-                                    key={c.conversationId}
-                                    onClick={() => selectConversation(c.conversationId)}
-                                    className={`
-                                        conversation-item rounded-none cursor-pointer flex items-center gap-3 text-sm mb-1
-                                        ${conversationId === c.conversationId ? 'active' : ''}
-                                    `}
-                                >
-                                    <MessageOutlined className={conversationId === c.conversationId ? 'text-accent' : 'text-ink-400'} />
-                                    <div className="truncate flex-1 font-mono text-xs">{c.conversationId}</div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-                <div className="p-4 border-t border-border bg-transparent">
-                    <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/dashboard')} block type="text" className="text-ink-400 hover:text-ink-900 h-10 hover:bg-slate-100">
-                        返回仪表盘
-                    </Button>
-                </div>
-            </Sider>
 
-            {/* Split Screen Layout */}
-            <Layout className="flex-1 h-full relative bg-background">
+                    <div className="space-y-1">
+                        {conversations.map((c) => (
+                            <div
+                                key={c.conversationId}
+                                onClick={() => selectConversation(c.conversationId)}
+                                className={`
+                                    group flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer transition-all
+                                    ${conversationId === c.conversationId
+                                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/50'
+                                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                                    }
+                                `}
+                            >
+                                <MessageOutlined className={conversationId === c.conversationId ? 'text-white' : 'text-slate-600 group-hover:text-slate-400'} />
+                                <div className="flex-1 truncate text-sm font-medium">
+                                    {c.conversationId.substring(0, 18)}...
+                                </div>
+                                {conversationId === c.conversationId && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* User Footer */}
+                <div className="p-4 border-t border-white/5 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-slate-400 text-sm hover:text-white cursor-pointer" onClick={() => navigate('/dashboard')}>
+                        <ArrowLeftOutlined />
+                        <span>返回控制台</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* 2. Main Chat Area */}
+            <div className={`flex-1 flex flex-col relative min-w-0 transition-all duration-300 bg-white`}>
                 {/* Header */}
-                <div className="h-16 flex items-center justify-between px-6 bg-background/80 backdrop-blur-md shrink-0 z-10 sticky top-0 border-b border-border">
-                    <div className="font-semibold text-ink-900 flex items-center gap-3">
-                        {/* 移动端返回按钮 - 仅在侧边栏隐藏时显示 */}
-                        <Tooltip title="返回仪表盘" className="md:hidden">
+                <header className="h-16 px-6 flex items-center justify-between bg-white border-b border-slate-100 z-10">
+                    <div className="flex items-center gap-4">
+                        <Button
+                            icon={isSidebarOpen ? <MenuOutlined /> : <MenuOutlined />}
+                            type="text"
+                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                        />
+                        <div>
+                            <h1 className="text-lg font-bold text-slate-900 leading-tight">{agentName}</h1>
+                            <p className="text-xs text-slate-500 max-w-md truncate">{agentDesc}</p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <Tooltip title="可视化面板">
                             <Button
-                                type="text"
-                                icon={<ArrowLeftOutlined />}
-                                onClick={() => navigate('/dashboard')}
-                                className="md:hidden text-ink-400 hover:text-ink-900 hover:bg-slate-100 transition-all"
+                                type={isDagPanelVisible ? 'primary' : 'text'}
+                                icon={<FunctionOutlined />}
+                                onClick={() => setIsDagPanelVisible(!isDagPanelVisible)}
+                                className={isDagPanelVisible ? 'bg-slate-900' : 'text-slate-500'}
                             />
                         </Tooltip>
-                        <div className={`w-2.5 h-2.5 rounded-full ${conversationId ? 'bg-emerald-500 shadow-glow animate-pulse' : 'bg-slate-300'}`} />
-                        <div>
-                            <div className="text-sm font-bold text-ink-900">{conversationId ? `SESSION: ${conversationId}` : 'New Session'}</div>
-                            <div className="text-xs text-ink-400 font-normal">
-                                {loading ? 'Agent is thinking...' : 'Waiting for input'}
-                            </div>
-                        </div>
+                        <Button icon={<ShareAltOutlined />} type="text" className="text-slate-500" />
+                        <Button icon={<MoreOutlined />} type="text" className="text-slate-500" />
                     </div>
+                </header>
 
-                    {/* Right Header Actions */}
-                    <div className="flex items-center gap-2">
-                        {!screens.xl && (
-                            <Button
-                                type="text"
-                                icon={<FunctionOutlined />}
-                                onClick={() => setIsDrawerOpen(true)}
-                            >
-                                Show Graph
-                            </Button>
-                        )}
-                        {screens.xl && (
-                            <Tooltip title={isDagPanelVisible ? "Collapse Graph" : "Expand Graph"}>
-                                <Button
-                                    type="text"
-                                    icon={isDagPanelVisible ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                                    onClick={() => setIsDagPanelVisible(!isDagPanelVisible)}
-                                />
-                            </Tooltip>
-                        )}
-                    </div>
-                </div>
-
-                <div className="flex-1 flex overflow-hidden">
-                    {/* Left Panel: Chat Area - CENTER PAPER */}
-                    <div className="flex-1 flex flex-col min-w-0 bg-paper transition-all duration-300 relative z-10 shadow-paper mx-0 md:mx-4 md:my-4 rounded-xl border border-border">
-                        {/* Messages */}
-                        <div className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth custom-scrollbar">
-                            <div className="max-w-3xl mx-auto flex flex-col gap-8 pb-4">
-                                {messages.length === 0 && !loading && (
-                                    <EmptyState agentName={agentName} agentDesc={agentDesc} />
-                                )}
-
-                                <div className="message-list">
-                                    {messages.map((msg, index) => (
-                                        <div key={index}>
-                                            <MessageBubble message={msg} />
-                                            {index === messages.length - 1 &&
-                                                interventionState?.isPaused &&
-                                                interventionState?.conversationId === conversationId && (
-                                                    <div style={{ maxWidth: '80%', marginTop: 8 }}>
-                                                        <HumanInterventionReview
-                                                            agentId={id!}
-                                                            conversationId={conversationId}
-                                                            nodeId={interventionState.nodeId!}
-                                                            nodeName={interventionState.nodeName!}
-                                                            checkMessage={interventionState.checkMessage!}
-                                                            refreshKey={snapshotRefreshKey}
-                                                            onReview={handleReviewSubmit}
-                                                        />
-                                                    </div>
-                                                )}
-                                        </div>
-                                    ))}
-                                    {loading && messages.length > 0 && !interventionState?.isPaused && (
-                                        <div style={{ marginLeft: 16, marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }} className="text-gray-400 text-sm">
-                                            <Spin size="small" />
-                                            <span>Processing node logic...</span>
-                                        </div>
-                                    )}
-                                    <div ref={messagesEndRef} />
-                                </div>
+                {/* Messages */}
+                <div
+                    className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth custom-scrollbar bg-slate-50/50"
+                    ref={chatContainerRef}
+                >
+                    {messages.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center -mt-10">
+                            <div className="w-24 h-24 rounded-3xl bg-gradient-to-tr from-indigo-100 to-white shadow-xl flex items-center justify-center mb-6 animate-float">
+                                <RobotOutlined className="text-5xl text-indigo-500" />
                             </div>
-                        </div>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-2">我是 {agentName}</h2>
+                            <p className="text-slate-500 mb-8 max-w-md text-center">
+                                {agentDesc || '我可以帮您处理复杂任务、分析数据或生成创意内容。'}
+                            </p>
 
-                        {/* Input Area */}
-                        <div className="p-6 bg-white shrink-0 border-t border-slate-100 rounded-b-xl">
-                            <div className="max-w-3xl mx-auto relative chat-input-container">
-                                <Input.TextArea
-                                    value={input}
-                                    onChange={e => setInput(e.target.value)}
-                                    onPressEnter={(e) => {
-                                        if (!e.shiftKey && !e.nativeEvent.isComposing) {
-                                            e.preventDefault();
-                                            handleSend();
-                                        }
-                                    }}
-                                    autoSize={{ minRows: 1, maxRows: 6 }}
-                                    placeholder="输入消息以开始对话..."
-                                    className="!pr-24 !py-3 !px-4 !bg-transparent !border !border-border !text-ink-900 !text-base resize-none !shadow-none focus:!border-accent focus:!shadow-sm transition-all rounded-2xl placeholder:!text-ink-400"
-                                />
-                                <div className="absolute bottom-2.5 right-2.5 flex gap-2">
-                                    {loading && !interventionState?.isPaused ? (
-                                        <Tooltip title="停止生成">
-                                            <Button
-                                                type="default"
-                                                shape="circle"
-                                                size="large"
-                                                icon={<StopOutlined />}
-                                                onClick={handleStop}
-                                                className="border-red-100 text-red-500 hover:text-red-600 hover:bg-red-50"
-                                            />
-                                        </Tooltip>
-                                    ) : (
-                                        <Button
-                                            type="primary"
-                                            shape="circle"
-                                            size="large"
-                                            icon={<SendOutlined />}
-                                            onClick={() => handleSend()}
-                                            disabled={!input.trim() || (loading && !interventionState?.isPaused)}
-                                            className={`gradient-btn shadow-lg shadow-blue-500/30 border-none ${(!input.trim() || (loading && !interventionState?.isPaused)) && 'opacity-50 grayscale'}`}
-                                        />
-                                    )}
-                                </div>
-                            </div>
-                            <div className="text-center mt-3 text-xs text-gray-400">
-                                AI agent execution may produce unpredictable results. Review important outputs.
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Right Panel: DAG Visualization (Desktop) */}
-                    {/* Right Panel: DAG Visualization (Desktop) - ENGINEERING BLUEPRINT */}
-                    {isDagPanelVisible && (
-                        <div
-                            className="width-[40%] min-w-[400px] border-l border-border bg-background transition-all duration-300 ease-in-out relative flex flex-col"
-                            style={{ flexBasis: '40%' }}
-                        >
-                            <div className="h-full w-full">
-                                {dagNodes.length > 0 ? (
-                                    <DagVisualizationPanel
-                                        nodes={dagNodes}
-                                        edges={dagEdges}
-                                        activeNodeId={activeNodeId}
-                                        completedNodeIds={completedNodeIds}
-                                        errorNodeId={errorNodeId}
-                                        pausedNodeId={pausedNodeId}
-                                        className="h-full w-full"
-                                    />
-                                ) : (
-                                    <div className="h-full flex flex-col items-center justify-center text-slate-600">
-                                        <FunctionOutlined style={{ fontSize: 48, marginBottom: 16, opacity: 0.5 }} />
-                                        <span>No Execution Graph Available</span>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl w-full px-4">
+                                {['写一篇关于 AI 的博客', '分析最近的销售数据', '制定一个营销计划', '帮我检查这段代码'].map((suggestion, i) => (
+                                    <div
+                                        key={i}
+                                        onClick={() => handleSend(suggestion)}
+                                        className="p-4 bg-white border border-slate-200 rounded-xl cursor-pointer hover:border-indigo-400 hover:shadow-md transition-all text-sm text-slate-600 hover:text-indigo-600 font-medium text-center"
+                                    >
+                                        "{suggestion}"
                                     </div>
-                                )}
+                                ))}
                             </div>
+                        </div>
+                    ) : (
+                        <div className="max-w-4xl mx-auto space-y-8 pb-4">
+                            {messages.map((msg, idx) => (
+                                <MessageBubble key={idx} message={msg} />
+                            ))}
+                            <div ref={messagesEndRef} />
                         </div>
                     )}
                 </div>
-            </Layout>
 
-            {/* Mobile Drawer for DAG */}
-            <Drawer
-                title="Execution Graph"
-                placement="right"
-                onClose={() => setIsDrawerOpen(false)}
-                open={isDrawerOpen}
-                width="85%"
-                styles={{ body: { padding: 0, overflow: 'hidden' } }}
-            >
-                <div className="h-full bg-background">
+                {/* Input Area */}
+                <div className="p-6 bg-white/80 backdrop-blur-md border-t border-slate-100 relative">
+                    {/* Intervention Alert */}
+                    {interventionState && interventionState.isPaused && (
+                        <div className="absolute bottom-full left-0 right-0 p-4 bg-amber-50 border-t border-amber-100 backdrop-blur-sm animate-fade-in-up">
+                            <div className="max-w-4xl mx-auto w-full">
+                                <HumanInterventionReview
+                                    state={interventionState}
+                                    onSubmit={handleReviewSubmit}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="max-w-4xl mx-auto relative">
+                        <Input.TextArea
+                            value={input}
+                            onChange={e => setInput(e.target.value)}
+                            onPressEnter={e => {
+                                if (!e.shiftKey && !loading) {
+                                    e.preventDefault();
+                                    handleSend();
+                                }
+                            }}
+                            placeholder={loading ? "AI 正在思考..." : "发送消息给智能体..."}
+                            disabled={loading || (interventionState?.isPaused)}
+                            className="w-full !min-h-[60px] !max-h-[200px] !rounded-2xl !bg-slate-50 !border-slate-200 !text-slate-800 !py-4 !px-5 !pr-16 text-base shadow-inner focus:!bg-white focus:!shadow-lg focus:!border-indigo-200 transition-all resize-none"
+                            autoSize={{ minRows: 1, maxRows: 6 }}
+                        />
+                        <div className="absolute right-3 bottom-3 flex gap-2">
+                            {loading ? (
+                                <Button
+                                    danger
+                                    shape="circle"
+                                    icon={<StopOutlined />}
+                                    onClick={handleStop}
+                                    className="shadow-md hover:scale-110 transition-transform"
+                                />
+                            ) : (
+                                <Button
+                                    type="primary"
+                                    shape="circle"
+                                    icon={<SendOutlined />}
+                                    onClick={() => handleSend()}
+                                    disabled={!input.trim()}
+                                    className="bg-indigo-600 hover:bg-indigo-500 border-none shadow-md hover:scale-110 transition-transform btn-send"
+                                />
+                            )}
+                        </div>
+                    </div>
+                    <div className="text-center mt-2 text-xs text-slate-400">
+                        AI 生成的内容可能不准确，请核实重要信息。
+                    </div>
+                </div>
+            </div>
+
+            {/* 3. DAG Panel */}
+            <div className={`
+                ${isDagPanelVisible ? 'w-96 translate-x-0' : 'w-0 translate-x-full overflow-hidden'}
+                bg-slate-50 border-l border-slate-200 transition-all duration-300 ease-in-out relative flex flex-col shrink-0
+            `}>
+                <div className="h-16 px-4 flex items-center justify-between border-b border-slate-200 bg-white/50 backdrop-blur">
+                    <span className="font-bold text-slate-700 flex items-center gap-2">
+                        <HistoryOutlined /> 执行流
+                    </span>
+                    <Badge status="processing" text={loading ? '运行中' : '就绪'} />
+                </div>
+                <div className="flex-1 overflow-hidden relative">
                     <DagVisualizationPanel
                         nodes={dagNodes}
                         edges={dagEdges}
@@ -1034,8 +806,8 @@ const AgentChat: React.FC = () => {
                         className="h-full w-full"
                     />
                 </div>
-            </Drawer>
-        </Layout>
+            </div>
+        </div>
     );
 };
 

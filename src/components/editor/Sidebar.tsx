@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useAgentStore } from '@/store/useAgentStore';
 import { getNodeTemplates, NodeTemplate } from '@/api/config';
 import {
-    CodeSandboxOutlined,
-    AppstoreOutlined
+    AppstoreOutlined,
+    SearchOutlined
 } from '@ant-design/icons';
+import { Input, Empty } from 'antd';
 import llmIcon from '@/assets/icons/llm.svg';
 import codeIcon from '@/assets/icons/code.svg';
 import apiIcon from '@/assets/icons/api.svg';
@@ -15,15 +16,13 @@ import reactIcon from '@/assets/icons/react.svg';
 import actIcon from '@/assets/icons/act.svg';
 
 const Sidebar: React.FC = () => {
-    // nodeTypes in store might need to handle NodeTemplate[], but since it is likely any[], we treat it as such for now
-    // Ideally we should update the store type, but for now we just feed it the templates
     const { setNodeTypes } = useAgentStore();
     const [templates, setTemplates] = useState<NodeTemplate[]>([]);
+    const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         const fetchTypes = async () => {
             try {
-                // Use new API to get templates
                 const result = await getNodeTemplates();
                 const templateList = (Array.isArray(result) ? result : (result as any)?.data || []) as NodeTemplate[];
                 setTemplates(templateList);
@@ -37,93 +36,94 @@ const Sidebar: React.FC = () => {
 
     const onDragStart = (event: React.DragEvent, template: NodeTemplate) => {
         event.dataTransfer.setData('application/reactflow/type', 'custom');
-        // Use templateLabel as node variable name/label default
         event.dataTransfer.setData('application/reactflow/label', template.templateLabel);
-
-        // Pass the entire template object as data
-        // This ensures templateId, supportedConfigs, etc are available on the new node
         event.dataTransfer.setData('application/reactflow/data', JSON.stringify(template));
         event.dataTransfer.effectAllowed = 'move';
     };
 
     const getIcon = (iconName: string) => {
-        if (!iconName) return <img src={codeIcon} alt="Default" className="w-8 h-8 grayscale opacity-50" />;
+        if (!iconName) return <img src={codeIcon} alt="Default" className="w-5 h-5 grayscale opacity-50" />;
         const name = iconName.toLowerCase();
-        if (name.includes('llm')) return <img src={llmIcon} alt="LLM" className="w-8 h-8" />;
-        if (name.includes('code')) return <img src={codeIcon} alt="CODE" className="w-8 h-8" />;
-        if (name.includes('api')) return <img src={apiIcon} alt="API" className="w-8 h-8" />;
-        if (name.includes('router')) return <img src={routerIcon} alt="ROUTER" className="w-8 h-8" />;
-
-        if (name.includes('act')) return <img src={actIcon} alt="ACT" className="w-8 h-8" />;
-        if (name.includes('human')) return <img src={humanIcon} alt="HUMAN" className="w-8 h-8" />;
-        if (name.includes('plan')) return <img src={planIcon} alt="PLAN" className="w-8 h-8" />;
-        if (name.includes('react')) return <img src={reactIcon} alt="REACT" className="w-8 h-8" />;
-
-        return <img src={codeIcon} alt="Default" className="w-8 h-8 grayscale opacity-50" />;
+        if (name.includes('llm')) return <img src={llmIcon} alt="LLM" className="w-5 h-5" />;
+        if (name.includes('code')) return <img src={codeIcon} alt="CODE" className="w-5 h-5" />;
+        if (name.includes('api')) return <img src={apiIcon} alt="API" className="w-5 h-5" />;
+        if (name.includes('router')) return <img src={routerIcon} alt="ROUTER" className="w-5 h-5" />;
+        if (name.includes('act')) return <img src={actIcon} alt="ACT" className="w-5 h-5" />;
+        if (name.includes('human')) return <img src={humanIcon} alt="HUMAN" className="w-5 h-5" />;
+        if (name.includes('plan')) return <img src={planIcon} alt="PLAN" className="w-5 h-5" />;
+        if (name.includes('react')) return <img src={reactIcon} alt="REACT" className="w-5 h-5" />;
+        return <img src={codeIcon} alt="Default" className="w-5 h-5 grayscale opacity-50" />;
     };
 
     const getGradient = (iconName: string) => {
         const name = (iconName || '').toLowerCase();
-        if (name.includes('llm')) return 'bg-gradient-to-br from-purple-500 to-indigo-600';
-        if (name.includes('code')) return 'bg-gradient-to-br from-blue-500 to-cyan-500';
-        if (name.includes('api')) return 'bg-gradient-to-br from-emerald-500 to-teal-500';
-        if (name.includes('router')) return 'bg-gradient-to-br from-orange-500 to-red-500';
-
-        if (name.includes('act')) return 'bg-gradient-to-br from-green-500 to-emerald-600';
-        if (name.includes('human')) return 'bg-gradient-to-br from-pink-500 to-rose-500';
-        if (name.includes('plan')) return 'bg-gradient-to-br from-blue-600 to-indigo-600';
-        if (name.includes('react')) return 'bg-gradient-to-br from-violet-500 to-purple-600';
-
-        return 'bg-gradient-to-br from-gray-500 to-gray-600';
+        if (name.includes('llm')) return 'from-purple-500 to-indigo-600';
+        if (name.includes('code')) return 'from-blue-500 to-cyan-500';
+        if (name.includes('api')) return 'from-emerald-500 to-teal-500';
+        if (name.includes('router')) return 'from-orange-500 to-red-500';
+        if (name.includes('act')) return 'from-green-500 to-emerald-600';
+        if (name.includes('human')) return 'from-pink-500 to-rose-500';
+        if (name.includes('plan')) return 'from-blue-600 to-indigo-600';
+        if (name.includes('react')) return 'from-violet-500 to-purple-600';
+        return 'from-slate-500 to-slate-600';
     };
 
-    return (
-        <div className="w-full h-44 bg-white/80 backdrop-blur-xl border-t border-white/50 flex flex-col shadow-[0_-8px_30px_rgba(0,0,0,0.08)] z-20 relative">
-            {/* Soft decorative blob */}
-            <div className="absolute bottom-0 right-0 w-64 h-64 bg-blue-100/30 blur-[80px] rounded-full pointer-events-none" />
+    const filteredTemplates = templates.filter(t =>
+        t.templateLabel.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        t.nodeType.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
-            <div className="px-6 py-2 border-b border-gray-100/50 flex justify-between items-center bg-white/40">
-                <div className="flex items-center gap-2">
-                    <AppstoreOutlined className="text-blue-600" />
-                    <span className="font-bold text-gray-700">组件库</span>
-                    <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full font-medium">拖拽上屏</span>
+    return (
+        <div className="flex flex-col h-full bg-white border-r border-slate-200 w-64 shrink-0 shadow-lg z-20">
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+                <div className="flex items-center gap-2 mb-4">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
+                        <AppstoreOutlined />
+                    </div>
+                    <span className="font-bold text-slate-700 text-lg">组件库</span>
                 </div>
-                <span className="text-xs text-gray-400">Total: {templates.length}</span>
+                <Input
+                    prefix={<SearchOutlined className="text-slate-400" />}
+                    placeholder="搜索组件..."
+                    className="rounded-lg border-slate-200 bg-white focus:bg-white transition-all text-sm"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                />
             </div>
 
-            <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 flex gap-5 items-center scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                {templates.map((template) => (
-                    <div
-                        key={template.templateId}
-                        draggable
-                        onDragStart={(event) => onDragStart(event, template)}
-                        className="flex-shrink-0 cursor-move group"
-                    >
-                        <div className="w-48 h-24 bg-white rounded-xl border border-gray-100 p-3 flex flex-col justify-between shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group-hover:border-blue-200">
-                            {/* Hover Gradient Overlay */}
-                            <div className={`absolute top-0 left-0 w-1 h-full ${getGradient(template.icon)} opacity-0 group-hover:opacity-100 transition-opacity`} />
-
-                            <div className="flex items-start gap-3 z-10">
-                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center shadow-md ${getGradient(template.icon)} transform group-hover:scale-110 transition-transform duration-300`}>
+            <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
+                {filteredTemplates.length === 0 ? (
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到组件" className="mt-10" />
+                ) : (
+                    filteredTemplates.map((template) => (
+                        <div
+                            key={template.templateId}
+                            draggable
+                            onDragStart={(event) => onDragStart(event, template)}
+                            className="group cursor-move relative bg-white border border-slate-200 rounded-xl p-3 hover:border-indigo-300 hover:shadow-md transition-all duration-200"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${getGradient(template.icon)} flex items-center justify-center shadow-sm text-white shrink-0 group-hover:scale-105 transition-transform`}>
                                     {getIcon(template.icon)}
                                 </div>
-                                <div className="flex-1 min-w-0 pt-0.5">
-                                    <div className="font-bold text-gray-800 text-sm truncate group-hover:text-blue-600 transition-colors">{template.templateLabel}</div>
-                                    <div className="text-[10px] text-gray-400 font-mono mt-0.5">{template.nodeType}</div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="font-bold text-slate-700 text-sm truncate group-hover:text-indigo-600 transition-colors">
+                                        {template.templateLabel}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
+                                        {template.nodeType}
+                                    </div>
                                 </div>
                             </div>
-
-                            <div className="text-xs text-gray-400 line-clamp-1 pl-1">
-                                {template.description || '功能组件'}
-                            </div>
-
-                            {/* Plus Icon on Hover (Visual Cue) */}
-                            <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-blue-500 font-bold text-xl leading-none">
-                                +
-                            </div>
+                            {/* Decorative dot */}
+                            <div className={`absolute top-3 right-3 w-1.5 h-1.5 rounded-full bg-gradient-to-br ${getGradient(template.icon)} opacity-0 group-hover:opacity-100 transition-opacity`} />
                         </div>
-                    </div>
-                ))}
+                    ))
+                )}
+            </div>
+
+            <div className="p-3 border-t border-slate-100 bg-slate-50 text-center text-xs text-slate-400">
+                拖拽组件至画布以添加
             </div>
         </div>
     );
