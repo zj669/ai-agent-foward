@@ -6,18 +6,22 @@ import SnapshotViewer from './SnapshotViewer';
 const { Text, Title } = Typography;
 
 interface HumanInterventionReviewProps {
+    agentId: string;            // 新增: 需要agentId传递给SnapshotViewer
     conversationId: string;
     nodeId: string;
     nodeName: string;
     checkMessage: string;
+    refreshKey?: number;        // ⭐ 新增: 快照刷新触发器
     onReview: (data: { approved: boolean }) => Promise<void>;
 }
 
 const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
+    agentId,
     conversationId,
     nodeId,
     nodeName,
     checkMessage,
+    refreshKey,
     onReview
 }) => {
     const [loading, setLoading] = useState(false);
@@ -77,7 +81,7 @@ const HumanInterventionReview: React.FC<HumanInterventionReviewProps> = ({
 
                         {showSnapshot && (
                             <div style={{ marginTop: 12 }}>
-                                <SnapshotViewer conversationId={conversationId} />
+                                <SnapshotViewer agentId={agentId} conversationId={conversationId} refreshKey={refreshKey} />
                             </div>
                         )}
                     </div>

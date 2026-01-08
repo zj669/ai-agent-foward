@@ -1,11 +1,11 @@
 import React, { useCallback, useRef, useMemo } from 'react';
-import { ReactFlow, ReactFlowProvider, Background, Controls, MiniMap, useReactFlow, Connection, addEdge, Edge, Panel } from '@xyflow/react';
+import { ReactFlow, ReactFlowProvider, Background, Controls, MiniMap, useReactFlow, Connection, addEdge, Edge, Panel, BackgroundVariant } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useAgentStore } from '@/store/useAgentStore';
 import CustomNode from './CustomNode';
 import CustomEdge from './CustomEdge';
 import { Modal, message, Button, Tooltip } from 'antd';
-import { ExclamationCircleOutlined, VerticalAlignTopOutlined, ArrowRightOutlined } from '@ant-design/icons';
+import { ExclamationCircleOutlined, VerticalAlignTopOutlined, ArrowRightOutlined, BugOutlined } from '@ant-design/icons';
 import { EdgeType } from '@/types';
 import useAutoLayout from '@/hooks/useAutoLayout';
 
@@ -101,6 +101,19 @@ const FlowCanvas: React.FC = () => {
                 console.error('Failed to parse node data', e);
             }
 
+            let supportedConfigs: string[] = [];
+            if (extraData.editableFields) {
+                try {
+                    const parsed = typeof extraData.editableFields === 'string'
+                        ? JSON.parse(extraData.editableFields)
+                        : extraData.editableFields;
+                    supportedConfigs = Array.isArray(parsed) ? parsed : [];
+                } catch (e) {
+                    console.warn('Failed to parse editableFields:', e);
+                    supportedConfigs = [];
+                }
+            }
+
             const newNode = {
                 id: `node_${Date.now()}`,
                 type: 'custom',
@@ -109,6 +122,7 @@ const FlowCanvas: React.FC = () => {
                     label: label,
                     ...extraData,
                     nodeType: extraData.nodeType || 'UNKNOWN',
+                    supportedConfigs: supportedConfigs,
                 },
             };
 
@@ -130,14 +144,12 @@ const FlowCanvas: React.FC = () => {
         setSelectedEdgeId(edge.id);
     }, [setSelectedEdgeId]);
 
-    // Custom connect handler with loop detection
     const handleConnect = useCallback((connection: Connection) => {
         if (!connection.source || !connection.target) return;
 
         const isCycle = wouldCreateCycle(nodes, edges, connection.source, connection.target);
 
         if (isCycle) {
-            // Show confirmation modal for loop edge
             Modal.confirm({
                 title: '检测到环形连接',
                 icon: <ExclamationCircleOutlined style={{ color: '#faad14' }} />,
@@ -154,7 +166,6 @@ const FlowCanvas: React.FC = () => {
                 cancelText: '取消',
                 okButtonProps: { danger: true },
                 onOk: () => {
-                    // Create edge with LOOP_BACK type
                     const newEdge: Edge = {
                         id: `${connection.source}-${connection.target}-${Date.now()}`,
                         source: connection.source!,
@@ -169,7 +180,6 @@ const FlowCanvas: React.FC = () => {
                 },
             });
         } else {
-            // Normal edge
             const newEdge: Edge = {
                 id: `${connection.source}-${connection.target}-${Date.now()}`,
                 source: connection.source,
@@ -200,31 +210,44 @@ const FlowCanvas: React.FC = () => {
                 onEdgeClick={onEdgeClick}
                 onNodesDelete={onNodesDelete}
                 fitView
+                className="bg-slate-50"
             >
-                <Background />
-                <Controls />
-                <MiniMap />
+                <Background
+                    variant={BackgroundVariant.Dots}
+                    gap={20}
+                    size={2}
+                    color="#cbd5e1" // Slate 300
+                    className="opacity-50"
+                />
+                <Controls className="!bg-white !border !border-slate-200 !shadow-lg !rounded-lg !text-slate-600" />
+                <MiniMap
+                    className="!bg-white !border !border-slate-200 !shadow-lg !rounded-lg"
+                    nodeColor="#6366f1"
+                    maskColor="rgba(241, 245, 249, 0.7)"
+                />
 
                 {/* Auto Layout Panel */}
-                <Panel position="top-right" className="bg-white p-2 rounded shadow-md gap-2 flex">
-                    <Tooltip title="自动整理 (水平布局)">
-                        <Button
-                            icon={<ArrowRightOutlined />}
-                            onClick={() => onLayout('LR')}
-                            size="small"
-                        >
-                            水平整理
-                        </Button>
-                    </Tooltip>
-                    <Tooltip title="自动整理 (垂直布局)">
-                        <Button
-                            icon={<VerticalAlignTopOutlined />}
-                            onClick={() => onLayout('TB')}
-                            size="small"
-                        >
-                            垂直整理
-                        </Button>
-                    </Tooltip>
+                <Panel position="top-right" className="flex gap-2">
+                    <div className="bg-white/80 backdrop-blur-md p-1.5 rounded-lg shadow-lg border border-slate-200 flex gap-1">
+                        <Tooltip title="水平布局">
+                            <Button
+                                type="text"
+                                icon={<ArrowRightOutlined />}
+                                onClick={() => onLayout('LR')}
+                                size="small"
+                                className="text-slate-600 hover:text-indigo-600 hover:bg-indigo-50"
+                            />
+                        </Tooltip>
+                        <Tooltip title="垂直布局">
+                            <Button
+                                type="text"
+                                icon={<VerticalAlignTopOutlined />}
+                                onClick={() => onLayout('TB')}
+                                size="small"
+                                className="text-slate-600 hover:text-indigo-600 hover:bg-indigo-50"
+                            />
+                        </Tooltip>
+                    </div>
                 </Panel>
             </ReactFlow>
         </div>

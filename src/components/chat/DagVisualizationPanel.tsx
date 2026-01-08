@@ -61,8 +61,8 @@ const DagVisualization: React.FC<DagVisualizationPanelProps> = ({
                     isExecuting: isSourceRunning
                 },
                 style: isSourceRunning
-                    ? { stroke: '#a855f7', strokeWidth: 2.5 }
-                    : { stroke: '#475569', strokeWidth: 1.5 }
+                    ? { stroke: '#3b82f6', strokeWidth: 2 } // Blue 500
+                    : { stroke: '#cbd5e1', strokeWidth: 1.5 } // Slate 300
             };
         });
     }, [initialEdges, activeNodeId]);
@@ -89,27 +89,27 @@ const DagVisualization: React.FC<DagVisualizationPanelProps> = ({
 
     return (
         <div className={`relative w-full h-full dag-blueprint-bg ${className}`}>
-            {/* Progress Bar - Dark Theme */}
-            <div className="absolute top-4 left-4 right-4 z-10 flex items-center gap-4 bg-slate-950/90 backdrop-blur-xl rounded-2xl px-5 py-3 border border-slate-800 shadow-2xl">
+            {/* Progress Bar - "Engineering Blueprint" Style (Light) */}
+            <div className="absolute top-4 left-4 right-4 z-10 flex items-center gap-4 bg-white/90 backdrop-blur-xl rounded-2xl px-5 py-3 border border-slate-200 shadow-paper">
                 <div className="flex items-center gap-2">
-                    <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${activeNodeId ? 'bg-indigo-500 animate-pulse shadow-lg shadow-indigo-500/50' :
+                    <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${activeNodeId ? 'bg-blue-500 animate-pulse shadow-lg shadow-blue-500/50' :
                         completedNodeIds.length > 0 ? 'bg-emerald-500 shadow-lg shadow-emerald-500/30' :
-                            'bg-slate-600'
+                            'bg-slate-300'
                         }`}></div>
-                    <span className="text-sm font-bold text-slate-100 whitespace-nowrap">
+                    <span className="text-sm font-bold text-slate-800 whitespace-nowrap">
                         {completedNodeIds.length} / {initialNodes.length}
                     </span>
-                    <span className="text-xs text-slate-400">nodes</span>
+                    <span className="text-xs text-slate-500">nodes</span>
                 </div>
 
-                <div className="flex-1 h-2.5 bg-slate-700 rounded-full overflow-hidden">
+                <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
                     <div
-                        className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full transition-all duration-700 ease-out"
+                        className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-700 ease-out"
                         style={{ width: `${progressPercentage}%` }}
                     />
                 </div>
 
-                <span className="text-sm font-bold text-slate-100 tabular-nums min-w-[3.5rem] text-right">
+                <span className="text-sm font-bold text-slate-700 tabular-nums min-w-[3.5rem] text-right">
                     {progressPercentage}%
                 </span>
             </div>
@@ -126,7 +126,7 @@ const DagVisualization: React.FC<DagVisualizationPanelProps> = ({
                 nodesConnectable={false}
                 proOptions={{ hideAttribution: true }}
             >
-                <Background color="#475569" gap={25} size={1} />
+                <Background color="#cbd5e1" gap={25} size={1} />
             </ReactFlow>
         </div>
     );

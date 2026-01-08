@@ -19,19 +19,19 @@ export const publishAgent = async (agentId: string) => {
 };
 
 export const deleteAgent = async (agentId: string): Promise<void> => {
-    return request.delete(`/client/agent/${agentId}`);
+    return request.post(`/client/agent/delete/${agentId}`);
 };
 
-export const getConversationIds = async (agentId: string): Promise<{ conversationId: string }[]> => {
-    return request.get(`/client/agent/conversations/${agentId}`);
+export const getConversationIds = async (agentId: string): Promise<string[]> => {
+    return request.get(`/client/chat/conversations/${agentId}`);
 };
 
 export const getNewConversationId = async (): Promise<string> => {
-    return request.get('/client/agent/newChat');
+    return request.get('/client/chat/newChat');
 };
 
-export const getChatHistory = async (conversationId: string): Promise<any[]> => {
-    return request.get(`/client/agent/chat/history/${conversationId}`);
+export const getChatHistory = async (agentId: string, conversationId: string): Promise<any[]> => {
+    return request.get(`/client/chat/history/${agentId}/${conversationId}`);
 };
 
 // --- Human Intervention APIs ---
@@ -41,54 +41,36 @@ export interface ReviewRequest {
     conversationId: string;
     nodeId: string;
     approved: boolean;
-    comments?: string;
-    modifiedOutput?: string;
-}
-
-/** 执行上下文响应类型 */
-export interface ExecutionContextResponse {
-    conversationId: string;
-    status: 'PENDING' | 'PAUSED' | 'COMPLETED';
-    pausedNodeId?: string;
-    pausedNodeName?: string;
-    pausedAt?: number;
-    nodeResults: Record<string, any>;
-    allowModifyOutput?: boolean;
-    checkMessage?: string;
-    interventionRequest?: any; // Include interventionRequest object
+    agentId: string;  // 必填字段,用于加载工作流图
 }
 
 /** 提交人工介入审核 */
 export const submitReview = async (data: ReviewRequest): Promise<void> => {
-    return request.post('/client/agent/review', data);
+    return request.post('/client/chat/review', data);
 };
 
-/** 获取执行上下文 */
-export const getExecutionContext = async (conversationId: string): Promise<ExecutionContextResponse> => {
-    return request.get(`/client/agent/context/${conversationId}`);
-};
-
-/** 更新执行上下文 */
-export const updateExecutionContext = async (
-    conversationId: string,
-    modifications: Record<string, any>
-): Promise<void> => {
-    return request.put(`/client/agent/context/${conversationId}`, { modifications });
-};
 
 // --- Snapshot APIs ---
 
 import { ExecutionContextSnapshot, SnapshotModifications } from '@/types/snapshot';
 
 /** 获取完整快照 */
-export const getContextSnapshot = async (conversationId: string): Promise<ExecutionContextSnapshot> => {
-    return request.get(`/client/agent/snapshot/${conversationId}`);
+export const getContextSnapshot = async (
+    agentId: string,
+    conversationId: string
+): Promise<ExecutionContextSnapshot> => {
+    return request.get(`/client/chat/snapshot/${agentId}/${conversationId}`);
 };
 
 /** 更新快照可编辑字段 */
 export const updateContextSnapshot = async (
+    agentId: string,
     conversationId: string,
-    modifications: SnapshotModifications
+    nodeId: string | undefined,
+    stateData: Record<string, any>
 ): Promise<void> => {
-    return request.put(`/client/agent/snapshot/${conversationId}`, { modifications });
+    return request.post(`/client/chat/snapshot/${agentId}/${conversationId}`, {
+        nodeId,
+        stateData
+    });
 };

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Input, Button, Spin, Empty, Modal, message, Tooltip, Dropdown, Avatar } from 'antd';
+import { Input, Button, Empty, Modal, message, Tooltip, Dropdown } from 'antd';
 import { LoadingOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import {
@@ -11,12 +11,10 @@ import {
     DeleteOutlined,
     RocketOutlined,
     RobotOutlined,
-    ThunderboltOutlined,
     CheckCircleOutlined,
     FileTextOutlined,
     ArrowRightOutlined,
     SettingOutlined,
-    ReadOutlined,
     DatabaseOutlined,
     FilePdfOutlined,
     FileMarkdownOutlined,
@@ -30,7 +28,6 @@ import { AiAgent } from '@/types';
 import '../styles/dashboard.css';
 import LogoutTransition from '@/components/transitions/LogoutTransition';
 
-// ... (keep utility functions) ...
 // Utility for consistent avatar colors
 const getAvatarColor = (name: string) => {
     const gradients = [
@@ -49,25 +46,24 @@ const getAvatarColor = (name: string) => {
 // Get greeting based on time of day
 const getGreeting = () => {
     const hour = new Date().getHours();
+    if (hour < 5) return '夜深了';
     if (hour < 12) return '早上好';
+    if (hour < 14) return '中午好';
     if (hour < 18) return '下午好';
     return '晚上好';
 };
 
 // Skeleton Card Component
 const SkeletonCard: React.FC = () => (
-    <div className="skeleton-card animate-fade-in-up">
-        <div className="skeleton h-1.5 w-full mb-6" />
+    <div className="bg-white/40 backdrop-blur-md rounded-2xl p-6 border border-white/40 shadow-sm animate-pulse">
+        <div className="h-1.5 w-20 bg-slate-200 rounded mb-6" />
         <div className="flex justify-between items-start mb-5">
-            <div className="skeleton w-14 h-14 rounded-2xl" />
-            <div className="skeleton w-16 h-6 rounded-full" />
+            <div className="w-14 h-14 rounded-2xl bg-slate-200" />
+            <div className="w-16 h-6 rounded-full bg-slate-200" />
         </div>
-        <div className="skeleton h-6 w-3/4 mb-3" />
-        <div className="skeleton h-4 w-full mb-2" />
-        <div className="skeleton h-4 w-2/3" />
-        <div className="mt-6 pt-4 border-t border-gray-100">
-            <div className="skeleton h-4 w-24" />
-        </div>
+        <div className="h-6 w-3/4 bg-slate-200 rounded mb-3" />
+        <div className="h-4 w-full bg-slate-200 rounded mb-2" />
+        <div className="h-4 w-2/3 bg-slate-200 rounded" />
     </div>
 );
 
@@ -79,12 +75,11 @@ const Dashboard: React.FC = () => {
     const [searchText, setSearchText] = useState('');
     const [activeTab, setActiveTab] = useState<'agents' | 'knowledge'>('agents');
 
-    // 退出登录动画状态
+    // Logout animation state
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [logoutPosition, setLogoutPosition] = useState({ x: 0, y: 0 });
     const userAvatarRef = useRef<HTMLDivElement>(null);
 
-    // ... (keep useEffect and loadAgents) ...
     // Mock Knowledge Base Data
     const knowledgeStats = {
         total: 12,
@@ -120,8 +115,20 @@ const Dashboard: React.FC = () => {
     };
 
     const handleCreate = () => navigate('/agent/editor');
-    const handleEdit = (agentId: string) => navigate(`/agent/editor/${agentId}`);
-    const handleChat = (agentId: string) => navigate(`/agent/chat/${agentId}`);
+    const handleEdit = (agentId: string) => {
+        if (!agentId || agentId === 'undefined') {
+            message.error('无效的 Agent ID');
+            return;
+        }
+        navigate(`/agent/editor/${agentId}`);
+    };
+    const handleChat = (agentId: string) => {
+        if (!agentId || agentId === 'undefined') {
+            message.error('无效的 Agent ID');
+            return;
+        }
+        navigate(`/agent/chat/${agentId}`);
+    };
 
     const handlePublish = async (agentId: string, agentName: string) => {
         Modal.confirm({
@@ -163,7 +170,6 @@ const Dashboard: React.FC = () => {
     };
 
     const handleLogout = async () => {
-        // 获取头像位置作为动画起点
         if (userAvatarRef.current) {
             const rect = userAvatarRef.current.getBoundingClientRect();
             setLogoutPosition({
@@ -180,24 +186,17 @@ const Dashboard: React.FC = () => {
             okButtonProps: { danger: true },
             onOk: async () => {
                 try {
-                    // 1. 触发动画
                     setIsLoggingOut(true);
-
-                    // 2. 调用API（并行）
                     const logoutPromise = logout();
-
-                    // 3. 等待动画和API
                     await Promise.all([
                         logoutPromise,
-                        new Promise(resolve => setTimeout(resolve, 800)) // 至少展示800ms动画
+                        new Promise(resolve => setTimeout(resolve, 800))
                     ]);
-
                     message.success('已退出登录');
                     localStorage.removeItem('token');
                     navigate('/login');
                 } catch (error) {
                     console.error('退出登录失败', error);
-                    // 失败也强制退出
                     setTimeout(() => {
                         localStorage.removeItem('token');
                         navigate('/login');
@@ -207,14 +206,13 @@ const Dashboard: React.FC = () => {
         });
     };
 
-    // 用户下拉菜单项
     const userMenuItems: MenuProps['items'] = [
         {
             key: 'user-info',
             label: (
                 <div className="px-1 py-2">
-                    <div className="font-semibold text-gray-800">用户</div>
-                    <div className="text-xs text-gray-400">欢迎使用 AI Workbench</div>
+                    <div className="font-semibold text-ink-900">User</div>
+                    <div className="text-xs text-ink-400">Pro Plan</div>
                 </div>
             ),
             disabled: true,
@@ -242,9 +240,9 @@ const Dashboard: React.FC = () => {
     });
 
     const stats = activeTab === 'agents' ? {
-        card1: { label: '总智能体', value: agents.length, icon: <ThunderboltOutlined />, color: 'blue', subtext: '活跃运行中' },
+        card1: { label: '总智能体', value: agents.length, icon: <RobotOutlined />, color: 'blue', subtext: '活跃运行中' },
         card2: { label: '已发布', value: agents.filter(a => a.status === 1).length, icon: <CheckCircleOutlined />, color: 'emerald', total: agents.length },
-        card3: { label: '草稿箱', value: agents.filter(a => a.status === 0).length, icon: <FileTextOutlined />, color: 'orange', total: agents.length }
+        card3: { label: '草稿箱', value: agents.filter(a => a.status === 0).length, icon: <EditOutlined />, color: 'orange', total: agents.length }
     } : {
         card1: { label: '总文档', value: knowledgeStats.total, icon: <DatabaseOutlined />, color: 'purple', subtext: '知识库容量' },
         card2: { label: '已索引', value: knowledgeStats.indexed, icon: <CheckCircleOutlined />, color: 'emerald', total: knowledgeStats.total },
@@ -253,13 +251,13 @@ const Dashboard: React.FC = () => {
 
     const StatusBadge = ({ status }: { status: number }) => {
         const config = {
-            0: { label: '草稿', bg: 'bg-orange-100/80', text: 'text-orange-700', dot: 'bg-orange-500' },
-            1: { label: '已发布', bg: 'bg-emerald-100/80', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-            2: { label: '已停用', bg: 'bg-red-100/80', text: 'text-red-700', dot: 'bg-red-500' },
-        }[status] || { label: '未知', bg: 'bg-gray-100', text: 'text-gray-700', dot: 'bg-gray-500' };
+            0: { label: '草稿', bg: 'bg-orange-500/10', text: 'text-orange-600', dot: 'bg-orange-500' },
+            1: { label: '已发布', bg: 'bg-emerald-500/10', text: 'text-emerald-600', dot: 'bg-emerald-500' },
+            2: { label: '已停用', bg: 'bg-red-500/10', text: 'text-red-600', dot: 'bg-red-500' },
+        }[status] || { label: '未知', bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' };
 
         return (
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold backdrop-blur-sm shadow-sm ${config.bg} ${config.text}`}>
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold backdrop-blur-sm ${config.bg} ${config.text} border border-transparent hover:border-current transition-colors`}>
                 <div className={`w-1.5 h-1.5 rounded-full ${config.dot} animate-pulse`} />
                 {config.label}
             </div>
@@ -267,12 +265,11 @@ const Dashboard: React.FC = () => {
     };
 
     return (
-        <div className="h-screen flex flex-col bg-slate-50 relative">
+        <div className="h-screen flex flex-col bg-background relative overflow-hidden font-sans">
             {/* Mesh Gradient Background */}
             <div className="fixed inset-0 pointer-events-none -z-10">
-                <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-purple-200/40 blur-[100px] animate-pulse" />
-                <div className="absolute top-[20%] right-[-10%] w-[40%] h-[40%] rounded-full bg-blue-200/40 blur-[100px] animate-pulse" style={{ animationDelay: '1s' }} />
-                <div className="absolute bottom-[-10%] left-[20%] w-[40%] h-[40%] rounded-full bg-pink-200/30 blur-[100px] animate-pulse" style={{ animationDelay: '2s' }} />
+                <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[60%] rounded-full bg-indigo-100/50 blur-[120px]" />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[60%] rounded-full bg-blue-100/40 blur-[120px]" />
             </div>
 
             {/* Fixed Navbar */}
@@ -283,22 +280,21 @@ const Dashboard: React.FC = () => {
                             <RobotOutlined className="text-xl" />
                         </div>
                         <div>
-                            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 block leading-tight">
+                            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 block leading-tight">
                                 AI Workbench
                             </span>
-                            <span className="text-xs text-gray-500 font-medium tracking-wide">ENTERPRISE EDITION</span>
+                            <span className="text-xs text-ink-400 font-medium tracking-wide">ENTERPRISE EDITION</span>
                         </div>
                     </div>
                     {/* User Actions */}
                     <div className="flex items-center gap-3">
                         <Tooltip title="设置">
-                            <Button type="text" shape="circle" icon={<SettingOutlined />} className="text-gray-500 hover:text-indigo-600 hover:bg-indigo-50" />
+                            <Button type="text" shape="circle" icon={<SettingOutlined />} className="text-ink-400 hover:text-indigo-600 hover:bg-indigo-50" />
                         </Tooltip>
                         <Dropdown
                             menu={{ items: userMenuItems }}
                             placement="bottomRight"
                             trigger={['click']}
-                            overlayClassName="user-dropdown"
                         >
                             <div
                                 ref={userAvatarRef}
@@ -318,34 +314,34 @@ const Dashboard: React.FC = () => {
             <div className={`flex-1 overflow-y-auto ${isLoggingOut ? 'logging-out' : ''}`}>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
                     {/* Welcome Banner */}
-                    <div className="welcome-banner rounded-3xl p-8 mb-8 text-white shadow-2xl animate-fade-in-up">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div className="relative rounded-3xl bg-gradient-to-r from-ink-900 to-slate-800 p-10 text-white overflow-hidden shadow-2xl mb-10 animate-fade-in-up">
+                        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                             <div>
-                                <h1 className="text-3xl md:text-4xl font-bold mb-2">
-                                    {getGreeting()}! 👋
-                                </h1>
-                                <p className="text-white/80 text-lg">
-                                    欢迎回来，今天想创建什么样的智能体？
+                                <h1 className="text-4xl font-bold mb-3">{getGreeting()}，创造者</h1>
+                                <p className="text-slate-300 text-lg max-w-xl">
+                                    准备好构建下一个改变世界的智能体了吗？您的创意工坊已准备就绪。
                                 </p>
                             </div>
-                            <div className="flex gap-3">
-                                <Button
-                                    size="large"
-                                    icon={<PlusOutlined />}
-                                    onClick={handleCreate}
-                                    className="bg-white text-indigo-600 border-none hover:bg-white/90 shadow-lg h-12 px-6 rounded-xl font-semibold"
-                                >
-                                    快速创建
-                                </Button>
-                            </div>
+                            <Button
+                                type="primary"
+                                size="large"
+                                icon={<PlusOutlined />}
+                                onClick={handleCreate}
+                                className="h-12 px-8 rounded-xl bg-white text-ink-900 border-none font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all"
+                            >
+                                创建智能体
+                            </Button>
                         </div>
+                        {/* Abstract Shapes */}
+                        <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-indigo-500/20 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/3" />
+                        <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-purple-500/20 rounded-full blur-[60px] translate-y-1/2 -translate-x-1/3" />
                     </div>
 
                     {/* Tab Navigation */}
-                    <div className="flex items-center gap-8 mb-8 border-b border-gray-200/50 px-2 animate-fade-in-up" style={{ animationDelay: '50ms' }}>
+                    <div className="flex items-center gap-8 mb-8 border-b border-white/20 px-2 animate-fade-in-up" style={{ animationDelay: '50ms' }}>
                         <button
                             onClick={() => setActiveTab('agents')}
-                            className={`pb-4 text-base font-medium transition-all relative group ${activeTab === 'agents' ? 'text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`pb-4 text-base font-medium transition-all relative group ${activeTab === 'agents' ? 'text-indigo-600' : 'text-ink-400 hover:text-ink-700'}`}
                         >
                             <div className="flex items-center gap-2">
                                 <RobotOutlined className="text-lg" />
@@ -355,29 +351,17 @@ const Dashboard: React.FC = () => {
                                 <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-full shadow-lg shadow-indigo-500/50" />
                             )}
                         </button>
-                        {/* <button
-                            onClick={() => setActiveTab('knowledge')}
-                            className={`pb-4 text-base font-medium transition-all relative group ${activeTab === 'knowledge' ? 'text-purple-600' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            <div className="flex items-center gap-2">
-                                <ReadOutlined className="text-lg" />
-                                <span>知识库</span>
-                            </div>
-                            {activeTab === 'knowledge' && (
-                                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-purple-600 rounded-full shadow-lg shadow-purple-500/50" />
-                            )}
-                        </button> */}
                     </div>
 
                     {/* Hero Stats */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-                        <div className={`stat-card bg-gradient-to-br ${activeTab === 'agents' ? 'from-blue-500 to-indigo-600' : 'from-purple-500 to-pink-600'} rounded-2xl p-6 text-white shadow-xl transform hover:-translate-y-1 transition-all duration-300 animate-fade-in-up`} style={{ animationDelay: '100ms' }}>
+                        <div className={`bg-gradient-to-br ${activeTab === 'agents' ? 'from-blue-500 to-indigo-600' : 'from-purple-500 to-pink-600'} rounded-2xl p-6 text-white shadow-xl transform hover:-translate-y-1 transition-all duration-300 animate-fade-in-up`} style={{ animationDelay: '100ms' }}>
                             <div className="flex justify-between items-start">
                                 <div>
                                     <p className="text-white/80 font-medium mb-1">{stats.card1.label}</p>
                                     <h3 className="text-4xl font-bold">{stats.card1.value}</h3>
                                 </div>
-                                <div className="stat-card-icon bg-white/20 p-3 rounded-xl backdrop-blur-sm">
+                                <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
                                     <span className="text-2xl">{stats.card1.icon}</span>
                                 </div>
                             </div>
@@ -387,29 +371,29 @@ const Dashboard: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="stat-card bg-white/60 backdrop-blur-md rounded-2xl p-6 border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+                        <div className="bg-white/60 backdrop-blur-md rounded-2xl p-6 border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
                             <div className="flex justify-between items-center mb-2">
-                                <div className="text-gray-500 font-medium">{stats.card2.label}</div>
-                                <div className="stat-card-icon bg-emerald-50 p-2.5 rounded-xl">
+                                <div className="text-ink-500 font-medium">{stats.card2.label}</div>
+                                <div className="bg-emerald-50 p-2.5 rounded-xl">
                                     <CheckCircleOutlined className="text-emerald-500 text-xl" />
                                 </div>
                             </div>
-                            <h3 className="text-3xl font-bold text-gray-800">{stats.card2.value}</h3>
-                            <div className="w-full bg-gray-200 h-1.5 rounded-full mt-3 overflow-hidden">
+                            <h3 className="text-3xl font-bold text-ink-900">{stats.card2.value}</h3>
+                            <div className="w-full bg-slate-200 h-1.5 rounded-full mt-3 overflow-hidden">
                                 <div className="bg-gradient-to-r from-emerald-400 to-emerald-600 h-full rounded-full transition-all duration-500" style={{ width: `${stats.card2.total ? (stats.card2.value / stats.card2.total) * 100 : 0}%` }} />
                             </div>
                         </div>
 
-                        <div className="stat-card bg-white/60 backdrop-blur-md rounded-2xl p-6 border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300 animate-fade-in-up" style={{ animationDelay: '300ms' }}>
+                        <div className="bg-white/60 backdrop-blur-md rounded-2xl p-6 border border-white/50 shadow-lg hover:shadow-xl transition-all duration-300 animate-fade-in-up" style={{ animationDelay: '300ms' }}>
                             <div className="flex justify-between items-center mb-2">
-                                <div className="text-gray-500 font-medium">{stats.card3.label}</div>
-                                <div className={`stat-card-icon ${activeTab === 'agents' ? 'bg-orange-50' : 'bg-blue-50'} p-2.5 rounded-xl`}>
-                                    <span className={`${activeTab === 'agents' ? 'text-orange-500' : 'text-blue-500'} text-xl`}>{stats.card3.icon}</span>
+                                <div className="text-ink-500 font-medium">{stats.card3.label}</div>
+                                <div className={`bg-orange-50 p-2.5 rounded-xl`}>
+                                    <span className="text-orange-500 text-xl">{stats.card3.icon}</span>
                                 </div>
                             </div>
-                            <h3 className="text-3xl font-bold text-gray-800">{stats.card3.value}</h3>
-                            <div className="w-full bg-gray-200 h-1.5 rounded-full mt-3 overflow-hidden">
-                                <div className={`bg-gradient-to-r ${activeTab === 'agents' ? 'from-orange-400 to-orange-600' : 'from-blue-400 to-blue-600'} h-full rounded-full transition-all duration-500`} style={{ width: `${stats.card3.total ? (stats.card3.value / stats.card3.total) * 100 : 0}%` }} />
+                            <h3 className="text-3xl font-bold text-ink-900">{stats.card3.value}</h3>
+                            <div className="w-full bg-slate-200 h-1.5 rounded-full mt-3 overflow-hidden">
+                                <div className="bg-gradient-to-r from-orange-400 to-orange-600 h-full rounded-full transition-all duration-500" style={{ width: `${stats.card3.total ? (stats.card3.value / stats.card3.total) * 100 : 0}%` }} />
                             </div>
                         </div>
                     </div>
@@ -427,14 +411,14 @@ const Dashboard: React.FC = () => {
                                     <button
                                         key={item.label}
                                         onClick={() => setFilterStatus(item.value as any)}
-                                        className={`filter-tab px-5 py-2 text-sm font-semibold rounded-lg transition-all duration-200 flex items-center gap-2 ${filterStatus === item.value
-                                            ? 'active bg-white text-gray-900 shadow-md'
-                                            : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
+                                        className={`px-5 py-2 text-sm font-semibold rounded-lg transition-all duration-200 flex items-center gap-2 ${filterStatus === item.value
+                                            ? 'bg-white text-ink-900 shadow-md'
+                                            : 'text-ink-500 hover:text-ink-700 hover:bg-white/50'
                                             }`}
                                     >
                                         {item.label}
                                         {item.count > 0 && (
-                                            <span className={`text-xs px-1.5 py-0.5 rounded-full ${filterStatus === item.value ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>
+                                            <span className={`text-xs px-1.5 py-0.5 rounded-full ${filterStatus === item.value ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-ink-500'}`}>
                                                 {item.count}
                                             </span>
                                         )}
@@ -443,11 +427,11 @@ const Dashboard: React.FC = () => {
                             </div>
                         ) : (
                             <div className="bg-white/70 backdrop-blur-md p-1.5 rounded-xl border border-white/50 shadow-sm flex gap-1">
-                                <button className="filter-tab px-5 py-2 text-sm font-semibold rounded-lg active bg-white text-gray-900 shadow-md flex items-center gap-2">
+                                <button className="px-5 py-2 text-sm font-semibold rounded-lg bg-white text-ink-900 shadow-md flex items-center gap-2">
                                     全部文档
                                     <span className="text-xs px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-600">12</span>
                                 </button>
-                                <button className="filter-tab px-5 py-2 text-sm font-semibold rounded-lg text-gray-500 hover:bg-white/50 flex items-center gap-2">
+                                <button className="px-5 py-2 text-sm font-semibold rounded-lg text-ink-500 hover:bg-white/50 flex items-center gap-2">
                                     已索引
                                 </button>
                             </div>
@@ -456,8 +440,8 @@ const Dashboard: React.FC = () => {
                         <div className="flex gap-4 w-full md:w-auto">
                             <Input
                                 placeholder={activeTab === 'agents' ? "搜索智能体..." : "搜索知识库文档..."}
-                                prefix={<SearchOutlined className="text-gray-400" />}
-                                className="flex-1 md:w-64 rounded-xl border-gray-200/50 bg-white/70 backdrop-blur-sm focus:bg-white transition-all h-11"
+                                prefix={<SearchOutlined className="text-ink-400" />}
+                                className="flex-1 md:w-64 rounded-xl border-white/60 bg-white/70 backdrop-blur-sm focus:bg-white transition-all h-11"
                                 allowClear
                                 onChange={e => setSearchText(e.target.value)}
                                 variant="filled"
@@ -467,7 +451,7 @@ const Dashboard: React.FC = () => {
                                 size="large"
                                 icon={activeTab === 'agents' ? <PlusOutlined /> : <CloudUploadOutlined />}
                                 onClick={handleCreate}
-                                className={`${activeTab === 'agents' ? 'bg-gradient-to-r from-gray-900 to-gray-700 hover:from-gray-800' : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500'} border-none shadow-lg h-11 px-6 rounded-xl font-semibold transition-all`}
+                                className={`${activeTab === 'agents' ? 'bg-gradient-to-r from-ink-900 to-slate-700 hover:from-slate-800' : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500'} border-none shadow-lg h-11 px-6 rounded-xl font-semibold transition-all`}
                             >
                                 {activeTab === 'agents' ? '新建' : '上传'}
                             </Button>
@@ -488,30 +472,28 @@ const Dashboard: React.FC = () => {
                                     {filteredAgents.map((agent, index) => (
                                         <div
                                             key={agent.agentId}
-                                            className={`agent-card group relative bg-white/80 backdrop-blur-md rounded-2xl border border-white/60 shadow-lg flex flex-col overflow-hidden animate-fade-in-up card-stagger-${Math.min(index + 1, 8)}`}
+                                            className="group relative bg-white/80 backdrop-blur-md rounded-2xl border border-white/60 shadow-lg flex flex-col overflow-hidden animate-fade-in-up"
+                                            style={{ animationDelay: `${Math.min(index + 1, 8) * 0.1}s` }}
                                         >
-                                            {/* Gradient Top Border */}
-                                            <div className={`agent-card-gradient-bar h-1.5 w-full bg-gradient-to-r ${getAvatarColor(agent.agentName)}`} />
-
                                             <div className="p-6 flex-1 cursor-pointer" onClick={() => handleEdit(agent.agentId)}>
                                                 <div className="flex justify-between items-start mb-5">
-                                                    <div className={`agent-card-avatar w-14 h-14 rounded-2xl bg-gradient-to-br ${getAvatarColor(agent.agentName)} flex items-center justify-center text-white text-2xl font-bold shadow-lg`}>
+                                                    <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getAvatarColor(agent.agentName)} flex items-center justify-center text-white text-2xl font-bold shadow-lg`}>
                                                         {agent.agentName[0]?.toUpperCase()}
                                                     </div>
                                                     <StatusBadge status={agent.status} />
                                                 </div>
 
-                                                <h3 className="text-xl font-bold text-gray-900 mb-2 truncate group-hover:text-indigo-600 transition-colors">
+                                                <h3 className="text-xl font-bold text-ink-900 mb-2 truncate group-hover:text-indigo-600 transition-colors">
                                                     {agent.agentName}
                                                 </h3>
 
-                                                <p className="text-gray-500 text-sm line-clamp-3 leading-relaxed min-h-[60px]">
+                                                <p className="text-ink-400 text-sm line-clamp-3 leading-relaxed min-h-[60px]">
                                                     {agent.description || '暂无描述信息...'}
                                                 </p>
                                             </div>
 
-                                            <div className="px-6 py-4 bg-gray-50/50 border-t border-gray-100 flex justify-between items-center">
-                                                <span className="text-xs font-medium text-gray-400 bg-gray-100/80 px-2 py-1 rounded-md">
+                                            <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center">
+                                                <span className="text-xs font-medium text-ink-400 bg-slate-100/80 px-2 py-1 rounded-md">
                                                     {new Date(agent.updateTime).toLocaleDateString()}
                                                 </span>
 
@@ -527,7 +509,7 @@ const Dashboard: React.FC = () => {
                                                         </Tooltip>
                                                     )}
                                                     <Tooltip title="编辑">
-                                                        <Button type="text" shape="circle" icon={<EditOutlined />} className="text-gray-600 hover:bg-gray-100" onClick={(e) => { e.stopPropagation(); handleEdit(agent.agentId); }} />
+                                                        <Button type="text" shape="circle" icon={<EditOutlined />} className="text-ink-600 hover:bg-slate-100" onClick={(e) => { e.stopPropagation(); handleEdit(agent.agentId); }} />
                                                     </Tooltip>
                                                     <Tooltip title="删除">
                                                         <Button type="text" shape="circle" icon={<DeleteOutlined />} className="text-red-500 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); handleDelete(agent.agentId, agent.agentName); }} />
@@ -540,7 +522,7 @@ const Dashboard: React.FC = () => {
                                     {/* New Card Action */}
                                     <div
                                         onClick={handleCreate}
-                                        className="create-card bg-white/40 backdrop-blur-sm border-2 border-dashed border-indigo-200/50 rounded-2xl flex flex-col justify-center items-center text-indigo-400 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition-all duration-300 min-h-[280px] group animate-fade-in-up"
+                                        className="bg-white/40 backdrop-blur-sm border-2 border-dashed border-indigo-200/50 rounded-2xl flex flex-col justify-center items-center text-indigo-400 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition-all duration-300 min-h-[280px] group animate-fade-in-up"
                                         style={{ animationDelay: `${Math.min(filteredAgents.length + 1, 9) * 50}ms` }}
                                     >
                                         <div className="w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:bg-indigo-100 transition-all duration-300">
@@ -563,8 +545,8 @@ const Dashboard: React.FC = () => {
                                     }
                                     description={
                                         <div className="text-center">
-                                            <p className="text-gray-600 text-lg mb-1">还没有智能体</p>
-                                            <p className="text-gray-400">创建您的第一个 AI 助手，开始探索无限可能</p>
+                                            <p className="text-ink-600 text-lg mb-1">还没有智能体</p>
+                                            <p className="text-ink-400">创建您的第一个 AI 助手，开始探索无限可能</p>
                                         </div>
                                     }
                                     className="py-20 bg-white/60 backdrop-blur-md rounded-3xl shadow-lg border border-white/50 animate-fade-in-up"
@@ -594,17 +576,17 @@ const Dashboard: React.FC = () => {
                                             <div className={`w-2.5 h-2.5 rounded-full ${doc.status === 'indexed' ? 'bg-emerald-500' : 'bg-blue-500 animate-pulse'}`} />
                                         </Tooltip>
                                     </div>
-                                    <h3 className="text-lg font-bold text-gray-900 mb-1 truncate group-hover:text-purple-600 transition-colors">{doc.name}</h3>
-                                    <p className="text-gray-400 text-xs mb-4">上传于 {doc.date} • {doc.size}</p>
+                                    <h3 className="text-lg font-bold text-ink-900 mb-1 truncate group-hover:text-purple-600 transition-colors">{doc.name}</h3>
+                                    <p className="text-ink-400 text-xs mb-4">上传于 {doc.date} • {doc.size}</p>
                                     <div className="mt-auto flex gap-2">
-                                        <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-500">{doc.type}</span>
+                                        <span className="text-xs px-2 py-1 rounded bg-slate-100 text-ink-500">{doc.type}</span>
                                         <span className={`text-xs px-2 py-1 rounded ${doc.status === 'indexed' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
                                             {doc.status === 'indexed' ? '可用' : '解析中'}
                                         </span>
                                     </div>
                                 </div>
                             ))}
-                            <div className="create-card bg-white/40 backdrop-blur-sm border-2 border-dashed border-purple-200/50 rounded-2xl flex flex-col justify-center items-center text-purple-400 cursor-pointer hover:border-purple-400 hover:bg-purple-50/30 transition-all duration-300 min-h-[180px] group animate-fade-in-up">
+                            <div className="bg-white/40 backdrop-blur-sm border-2 border-dashed border-purple-200/50 rounded-2xl flex flex-col justify-center items-center text-purple-400 cursor-pointer hover:border-purple-400 hover:bg-purple-50/30 transition-all duration-300 min-h-[180px] group animate-fade-in-up">
                                 <div className="w-14 h-14 rounded-full bg-purple-50 flex items-center justify-center mb-3 group-hover:scale-110 group-hover:bg-purple-100 transition-all duration-300">
                                     <CloudUploadOutlined className="text-2xl text-purple-500" />
                                 </div>
