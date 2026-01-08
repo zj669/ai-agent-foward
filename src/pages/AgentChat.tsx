@@ -735,8 +735,13 @@ const AgentChat: React.FC = () => {
                         <div className="absolute bottom-full left-0 right-0 p-4 bg-amber-50 border-t border-amber-100 backdrop-blur-sm animate-fade-in-up">
                             <div className="max-w-4xl mx-auto w-full">
                                 <HumanInterventionReview
-                                    state={interventionState}
-                                    onSubmit={handleReviewSubmit}
+                                    agentId={id || ''}
+                                    conversationId={interventionState.conversationId}
+                                    nodeId={interventionState.nodeId}
+                                    nodeName={interventionState.nodeName}
+                                    checkMessage={interventionState.checkMessage}
+                                    refreshKey={snapshotRefreshKey}
+                                    onReview={handleReviewSubmit}
                                 />
                             </div>
                         </div>
